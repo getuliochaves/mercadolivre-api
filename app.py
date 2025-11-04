@@ -49,6 +49,11 @@ historico_buscas = []
 # Token de acesso (prioritário: variável de ambiente, senão OAuth)
 access_token = MERCADOLIVRE_CONFIG.get('ACCESS_TOKEN')
 
+
+# ========================================
+# FUNÇÕES AUXILIARES
+# ========================================
+
 def obter_access_token():
     """Obtém um access token usando Client Credentials ou Refresh Token"""
     global access_token
@@ -112,9 +117,61 @@ def obter_access_token():
     
     return None
 
+
 def limpar_codigo_mlb(codigo):
     """Remove hífens e espaços do código MLB"""
     return codigo.replace('-', '').replace(' ', '').strip().upper()
+
+
+def extrair_info_full(json_api):
+    """
+    Extrai informações detalhadas sobre Mercado Envios Full
+    """
+    shipping = json_api.get('shipping', {})
+    
+    # Verificar se é Full
+    logistic_type = shipping.get('logistic_type', '')
+    tags = shipping.get('tags', [])
+    
+    is_full = (
+        logistic_type in ['fulfillment', 'xd_drop_off', 'cross_docking'] or
+        'fulfillment' in tags or
+        'full' in str(tags).lower() or
+        'mandatory_free_shipping' in tags
+    )
+    
+    # Tipo de Full
+    tipo_full = 'Não é Full'
+    if is_full:
+        if logistic_type == 'fulfillment':
+            tipo_full = 'Mercado Envios Full'
+        elif logistic_type == 'xd_drop_off':
+            tipo_full = 'Full com Cross Docking'
+        elif logistic_type == 'cross_docking':
+            tipo_full = 'Cross Docking'
+        else:
+            tipo_full = 'Full (tipo não especificado)'
+    
+    return {
+        'e_full': is_full,
+        'tipo_full': tipo_full,
+        'logistic_type': logistic_type,
+        'tags_envio': tags,
+        'frete_gratis': shipping.get('free_shipping', False),
+        'modo_envio': shipping.get('mode', ''),
+        'metodos_envio': shipping.get('methods', []),
+        'store_pick_up': shipping.get('store_pick_up', False),
+        'local_pick_up': shipping.get('local_pick_up', False),
+        'free_methods': [
+            {
+                'id': method.get('id'),
+                'nome': method.get('name', ''),
+                'gratis': method.get('free_shipping', False)
+            }
+            for method in shipping.get('methods', [])
+        ]
+    }
+
 
 def buscar_produto_api(mlb_code):
     """Busca informações do produto na API do Mercado Livre"""
@@ -194,9 +251,14 @@ def buscar_produto_api(mlb_code):
         return {'error': f'Erro inesperado: {str(e)}', 'codigo': mlb_code}
 
 
+# ========================================
+# ROTAS
+# ========================================
+
 @app.route('/')
 def index():
     return render_template('index.html')
+
 
 @app.route('/buscar', methods=['POST'])
 def buscar():
@@ -214,15 +276,18 @@ def buscar():
     
     return jsonify(produto)
 
+
 @app.route('/historico')
 def historico():
     return jsonify(historico_buscas)
+
 
 @app.route('/limpar-historico', methods=['POST'])
 def limpar_historico():
     global historico_buscas
     historico_buscas = []
     return jsonify({'success': True, 'message': 'Histórico limpo com sucesso'})
+
 
 @app.route('/exportar-json/<mlb_code>')
 def exportar_json(mlb_code):
@@ -242,6 +307,7 @@ def exportar_json(mlb_code):
         as_attachment=True,
         download_name=filename
     )
+
 
 @app.route('/visualizar-json/<mlb_code>')
 def visualizar_json(mlb_code):
@@ -341,6 +407,7 @@ def visualizar_json(mlb_code):
     </html>
     """
 
+
 @app.route('/config-status')
 def config_status():
     status = {
@@ -353,6 +420,7 @@ def config_status():
     }
     return jsonify(status)
 
+
 @app.route('/health')
 def health():
     return jsonify({
@@ -360,30 +428,23 @@ def health():
         'timestamp': datetime.now().isoformat()
     }), 200
 
+
 @app.route('/json/<mlb_code>')
 def json_puro(mlb_code):
     """
     Retorna apenas o JSON puro do produto (sem HTML)
     Ideal para importar no Google Sheets ou outras integrações
-    Exemplo: https://mercadolivre-api-19r5.onrender.com/json/MLB3885071411
     """
     print(f"\n{'='*60}")
     print(f"📊 REQUISIÇÃO JSON PURO")
     print(f"{'='*60}")
-    print(f"📝 Código recebido: '{mlb_code}'")
     
-    # Limpar código
     mlb_code_limpo = limpar_codigo_mlb(mlb_code)
-    print(f"🧹 Código limpo: '{mlb_code_limpo}'")
-    
-    # Buscar produto na API
     produto = buscar_produto_api(mlb_code_limpo)
     
-    # Se deu erro, retornar erro em JSON
     if 'error' in produto:
         return jsonify(produto), 404
     
-    # Retornar JSON completo
     json_completo = produto.get('json_completo', produto)
     
     print(f"✅ JSON retornado com sucesso!")
@@ -391,30 +452,19 @@ def json_puro(mlb_code):
     
     return jsonify(json_completo)
 
+
 @app.route('/csv/<mlb_code>')
 def csv_completo(mlb_code):
     """
     Retorna dados do produto em formato CSV
-    Ideal para IMPORTDATA do Google Sheets
-    Exemplo: https://mercadolivre-api-19r5.onrender.com/csv/MLB3885071411
     """
-    print(f"\n{'='*60}")
-    print(f"📊 REQUISIÇÃO CSV")
-    print(f"{'='*60}")
-    print(f"📝 Código recebido: '{mlb_code}'")
-    
-    # Limpar código
     mlb_code_limpo = limpar_codigo_mlb(mlb_code)
-    
-    # Buscar produto na API
     produto = buscar_produto_api(mlb_code_limpo)
     
-    # Se deu erro
     if 'error' in produto:
         csv_output = f"erro\n{produto['error']}"
         return csv_output, 404, {'Content-Type': 'text/csv; charset=utf-8'}
     
-    # Criar CSV com dados principais
     csv_lines = []
     csv_lines.append("campo,valor")
     csv_lines.append(f"codigo,{produto['id']}")
@@ -430,9 +480,6 @@ def csv_completo(mlb_code):
     csv_lines.append(f"data_consulta,{produto['data_busca']}")
     
     csv_output = '\n'.join(csv_lines)
-    
-    print(f"✅ CSV gerado com sucesso!")
-    print(f"{'='*60}\n")
     
     return csv_output, 200, {'Content-Type': 'text/csv; charset=utf-8'}
 
@@ -441,29 +488,16 @@ def csv_completo(mlb_code):
 def csv_atributos(mlb_code):
     """
     Retorna TODOS os atributos do produto em CSV
-    Inclui características técnicas completas
-    Exemplo: https://mercadolivre-api-19r5.onrender.com/csv-atributos/MLB3885071411
     """
-    print(f"\n{'='*60}")
-    print(f"📊 REQUISIÇÃO CSV COM ATRIBUTOS")
-    print(f"{'='*60}")
-    
-    # Limpar código
     mlb_code_limpo = limpar_codigo_mlb(mlb_code)
-    
-    # Buscar produto na API
     produto = buscar_produto_api(mlb_code_limpo)
     
-    # Se deu erro
     if 'error' in produto:
         csv_output = f"erro\n{produto['error']}"
         return csv_output, 404, {'Content-Type': 'text/csv; charset=utf-8'}
     
-    # Criar CSV com TODOS os dados
     csv_lines = []
     csv_lines.append("campo,valor")
-    
-    # Dados principais
     csv_lines.append(f"codigo,{produto['id']}")
     csv_lines.append(f"titulo,\"{produto['titulo']}\"")
     csv_lines.append(f"preco,{produto['preco']}")
@@ -475,13 +509,11 @@ def csv_atributos(mlb_code):
     csv_lines.append(f"status,{produto['status']}")
     csv_lines.append(f"link,{produto['link']}")
     
-    # Adicionar atributos
     for attr in produto.get('atributos', []):
-        nome = attr['nome'].replace(',', ';')  # Evitar quebra de CSV
+        nome = attr['nome'].replace(',', ';')
         valor = str(attr['valor']).replace(',', ';')
         csv_lines.append(f"\"{nome}\",\"{valor}\"")
     
-    # Adicionar imagens
     for i, img in enumerate(produto.get('imagens', []), 1):
         csv_lines.append(f"imagem_{i},{img}")
     
@@ -489,8 +521,87 @@ def csv_atributos(mlb_code):
     
     csv_output = '\n'.join(csv_lines)
     
-    print(f"✅ CSV com atributos gerado!")
+    return csv_output, 200, {'Content-Type': 'text/csv; charset=utf-8'}
+
+
+# ========================================
+# 🚚 ROTAS MERCADO ENVIOS FULL
+# ========================================
+
+@app.route('/full/<mlb_code>')
+def verificar_full(mlb_code):
+    """
+    Verifica se o produto é Mercado Envios Full
+    Exemplo: https://mercadolivre-api-19r5.onrender.com/full/MLB3885071411
+    """
+    print(f"\n{'='*60}")
+    print(f"🚚 VERIFICAÇÃO MERCADO ENVIOS FULL")
+    print(f"{'='*60}")
+    
+    mlb_code_limpo = limpar_codigo_mlb(mlb_code)
+    produto = buscar_produto_api(mlb_code_limpo)
+    
+    if 'error' in produto:
+        response = jsonify(produto)
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        return response, 404
+    
+    json_api = produto.get('json_completo', {})
+    info_full = extrair_info_full(json_api)
+    
+    resposta = {
+        "codigo": produto['id'],
+        "titulo": produto['titulo'],
+        "link": produto['link'],
+        "full": info_full,
+        "resumo": {
+            "e_full": info_full['e_full'],
+            "tipo": info_full['tipo_full'],
+            "frete_gratis": info_full['frete_gratis'],
+            "mensagem": f"✅ Este produto É Mercado Envios Full ({info_full['tipo_full']})" if info_full['e_full'] else "❌ Este produto NÃO é Mercado Envios Full"
+        }
+    }
+    
+    print(f"🚚 É Full? {info_full['e_full']}")
+    print(f"📦 Tipo: {info_full['tipo_full']}")
     print(f"{'='*60}\n")
+    
+    response = jsonify(resposta)
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    
+    return response
+
+
+@app.route('/csv-full/<mlb_code>')
+def csv_com_full(mlb_code):
+    """
+    Retorna CSV com informações sobre Full
+    Exemplo: https://mercadolivre-api-19r5.onrender.com/csv-full/MLB3885071411
+    """
+    mlb_code_limpo = limpar_codigo_mlb(mlb_code)
+    produto = buscar_produto_api(mlb_code_limpo)
+    
+    if 'error' in produto:
+        return f"erro\n{produto['error']}", 404
+    
+    json_api = produto.get('json_completo', {})
+    info_full = extrair_info_full(json_api)
+    
+    csv_lines = []
+    csv_lines.append("campo,valor")
+    csv_lines.append(f"codigo,{produto['id']}")
+    csv_lines.append(f"titulo,\"{produto['titulo']}\"")
+    csv_lines.append(f"preco,{produto['preco']}")
+    csv_lines.append(f"estoque,{produto['estoque']}")
+    csv_lines.append(f"vendidos,{produto['vendidos']}")
+    csv_lines.append(f"e_full,{info_full['e_full']}")
+    csv_lines.append(f"tipo_full,{info_full['tipo_full']}")
+    csv_lines.append(f"frete_gratis,{info_full['frete_gratis']}")
+    csv_lines.append(f"logistic_type,{info_full['logistic_type']}")
+    csv_lines.append(f"modo_envio,{info_full['modo_envio']}")
+    csv_lines.append(f"link,{produto['link']}")
+    
+    csv_output = '\n'.join(csv_lines)
     
     return csv_output, 200, {'Content-Type': 'text/csv; charset=utf-8'}
 
@@ -498,68 +609,45 @@ def csv_atributos(mlb_code):
 @app.route('/json-raw/<mlb_code>')
 def json_raw(mlb_code):
     """
-    Retorna o JSON COMPLETO e RAW direto da API do Mercado Livre
-    Sem processamento, exatamente como vem da API
-    Exemplo: https://mercadolivre-api-19r5.onrender.com/json-raw/MLB3885071411
+    Retorna o JSON COMPLETO e RAW direto da API
     """
-    print(f"\n{'='*60}")
-    print(f"📊 REQUISIÇÃO JSON RAW (COMPLETO)")
-    print(f"{'='*60}")
-    
-    # Limpar código
     mlb_code_limpo = limpar_codigo_mlb(mlb_code)
-    
-    # Buscar produto na API
     produto = buscar_produto_api(mlb_code_limpo)
     
-    # Se deu erro
     if 'error' in produto:
         return jsonify(produto), 404
     
-    # Retornar JSON COMPLETO da API (sem filtros)
     json_completo = produto.get('json_completo', produto)
     
-    print(f"✅ JSON RAW retornado!")
-    print(f"{'='*60}\n")
-    
-    # Adicionar headers CORS para permitir acesso de qualquer origem
     response = jsonify(json_completo)
     response.headers.add('Access-Control-Allow-Origin', '*')
     response.headers.add('Access-Control-Allow-Headers', 'Content-Type')
     
     return response
 
+
 @app.route('/json-completo/<mlb_code>')
 def json_completo_tudo(mlb_code):
     """
-    Retorna JSON COMPLETO com TODOS os dados processados e organizados
-    Inclui: dados básicos, atributos, imagens, descrição, vendedor, etc.
+    Retorna JSON COMPLETO com TODOS os dados + FULL
     Exemplo: https://mercadolivre-api-19r5.onrender.com/json-completo/MLB3885071411
     """
     print(f"\n{'='*60}")
-    print(f"📦 REQUISIÇÃO JSON COMPLETO (TUDO)")
+    print(f"📦 REQUISIÇÃO JSON COMPLETO (TUDO + FULL)")
     print(f"{'='*60}")
-    print(f"📝 Código recebido: '{mlb_code}'")
     
-    # Limpar código
     mlb_code_limpo = limpar_codigo_mlb(mlb_code)
-    print(f"🧹 Código limpo: '{mlb_code_limpo}'")
-    
-    # Buscar produto na API
     produto = buscar_produto_api(mlb_code_limpo)
     
-    # Se deu erro, retornar erro em JSON
     if 'error' in produto:
         response = jsonify(produto)
         response.headers.add('Access-Control-Allow-Origin', '*')
         return response, 404
     
-    # Pegar JSON original da API
     json_api = produto.get('json_completo', {})
+    info_full = extrair_info_full(json_api)
     
-    # Criar JSON super completo e organizado
     json_completo = {
-        # ===== INFORMAÇÕES BÁSICAS =====
         "informacoes_basicas": {
             "codigo": produto['id'],
             "titulo": produto['titulo'],
@@ -571,7 +659,6 @@ def json_completo_tudo(mlb_code):
             "data_consulta": produto['data_busca']
         },
         
-        # ===== PREÇO E ESTOQUE =====
         "preco_estoque": {
             "preco": produto['preco'],
             "preco_original": json_api.get('original_price'),
@@ -584,7 +671,6 @@ def json_completo_tudo(mlb_code):
             "metodo_compra": json_api.get('buying_mode', '')
         },
         
-        # ===== PRODUTO =====
         "produto": {
             "condicao": produto['condicao'],
             "categoria_id": produto['categoria'],
@@ -597,10 +683,11 @@ def json_completo_tudo(mlb_code):
             "video_id": json_api.get('video_id', '')
         },
         
-        # ===== ATRIBUTOS/CARACTERÍSTICAS =====
+        # ===== MERCADO ENVIOS FULL ===== 🚚
+        "mercado_envios_full": info_full,
+        
         "atributos": produto.get('atributos', []),
         
-        # ===== IMAGENS =====
         "imagens": {
             "total": len(produto.get('imagens', [])),
             "urls": produto.get('imagens', []),
@@ -618,7 +705,6 @@ def json_completo_tudo(mlb_code):
             ]
         },
         
-        # ===== VENDEDOR =====
         "vendedor": {
             "id": json_api.get('seller_id'),
             "apelido": json_api.get('seller_address', {}).get('city', {}).get('name', ''),
@@ -628,7 +714,6 @@ def json_completo_tudo(mlb_code):
             "reputacao": json_api.get('seller_reputation', {})
         },
         
-        # ===== LOCALIZAÇÃO =====
         "localizacao": {
             "cidade": json_api.get('seller_address', {}).get('city', {}).get('name', ''),
             "estado": json_api.get('seller_address', {}).get('state', {}).get('name', ''),
@@ -637,7 +722,6 @@ def json_completo_tudo(mlb_code):
             "endereco_completo": json_api.get('seller_address', {})
         },
         
-        # ===== ENVIO =====
         "envio": {
             "frete_gratis": json_api.get('shipping', {}).get('free_shipping', False),
             "modo_envio": json_api.get('shipping', {}).get('mode', ''),
@@ -648,7 +732,6 @@ def json_completo_tudo(mlb_code):
             "loja_pickup": json_api.get('shipping', {}).get('store_pick_up', False)
         },
         
-        # ===== VARIAÇÕES (se houver) =====
         "variacoes": [
             {
                 "id": var.get('id'),
@@ -661,20 +744,17 @@ def json_completo_tudo(mlb_code):
             for var in json_api.get('variations', [])
         ] if json_api.get('variations') else [],
         
-        # ===== DESCRIÇÃO =====
         "descricao": {
             "tem_descricao": json_api.get('descriptions', []) != [],
             "snapshot": json_api.get('descriptions', [{}])[0] if json_api.get('descriptions') else {}
         },
         
-        # ===== ESTATÍSTICAS =====
         "estatisticas": {
             "visitas": json_api.get('visits', 0),
             "health": json_api.get('health', 0),
             "catalogo_listado": json_api.get('catalog_listing', False)
         },
         
-        # ===== INFORMAÇÕES ADICIONAIS =====
         "informacoes_adicionais": {
             "site_id": json_api.get('site_id', ''),
             "permalink": json_api.get('permalink', ''),
@@ -687,17 +767,13 @@ def json_completo_tudo(mlb_code):
             "channels": json_api.get('channels', [])
         },
         
-        # ===== JSON ORIGINAL COMPLETO DA API =====
         "json_original_api": json_api
     }
     
-    print(f"✅ JSON COMPLETO gerado com sucesso!")
-    print(f"📊 Total de campos: {len(json_completo)}")
-    print(f"📸 Total de imagens: {len(produto.get('imagens', []))}")
-    print(f"🏷️ Total de atributos: {len(produto.get('atributos', []))}")
+    print(f"✅ JSON COMPLETO gerado!")
+    print(f"🚚 É Full? {info_full['e_full']} ({info_full['tipo_full']})")
     print(f"{'='*60}\n")
     
-    # Retornar JSON com CORS habilitado
     response = jsonify(json_completo)
     response.headers.add('Access-Control-Allow-Origin', '*')
     response.headers.add('Access-Control-Allow-Headers', 'Content-Type')
@@ -710,25 +786,13 @@ def json_completo_tudo(mlb_code):
 def json_simplificado(mlb_code):
     """
     Retorna JSON simplificado com apenas os dados principais
-    Ideal para planilhas (menos dados, mais fácil de trabalhar)
-    Exemplo: https://mercadolivre-api-19r5.onrender.com/json-simplificado/MLB3885071411
     """
-    print(f"\n{'='*60}")
-    print(f"📊 REQUISIÇÃO JSON SIMPLIFICADO")
-    print(f"{'='*60}")
-    print(f"📝 Código recebido: '{mlb_code}'")
-    
-    # Limpar código
     mlb_code_limpo = limpar_codigo_mlb(mlb_code)
-    
-    # Buscar produto na API
     produto = buscar_produto_api(mlb_code_limpo)
     
-    # Se deu erro, retornar erro em JSON
     if 'error' in produto:
         return jsonify(produto), 404
     
-    # Criar versão simplificada
     produto_simplificado = {
         'codigo': produto['id'],
         'titulo': produto['titulo'],
@@ -744,9 +808,6 @@ def json_simplificado(mlb_code):
         'data_consulta': produto['data_busca']
     }
     
-    print(f"✅ JSON simplificado retornado!")
-    print(f"{'='*60}\n")
-    
     return jsonify(produto_simplificado)
 
 
@@ -754,100 +815,31 @@ def json_simplificado(mlb_code):
 def exibir_json(mlb_code):
     """
     Busca e exibe o JSON de um produto diretamente pela URL
-    Exemplo: https://mercadolivre-api-19r5.onrender.com/exibir-json/MLB3885071411
     """
-    print(f"\n{'='*60}")
-    print(f"🔗 BUSCA VIA URL DINÂMICA")
-    print(f"{'='*60}")
-    print(f"📝 Código recebido: '{mlb_code}'")
-    
-    # Limpar código
     mlb_code_limpo = limpar_codigo_mlb(mlb_code)
-    print(f"🧹 Código limpo: '{mlb_code_limpo}'")
-    
-    # Buscar produto na API
     produto = buscar_produto_api(mlb_code_limpo)
     
-    # Se deu erro, exibir página de erro
     if 'error' in produto:
         return f"""
         <!DOCTYPE html>
         <html lang="pt-BR">
         <head>
             <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>❌ Erro - {mlb_code_limpo}</title>
             <style>
-                body {{
-                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                    display: flex;
-                    justify-content: center;
-                    align-items: center;
-                    min-height: 100vh;
-                    margin: 0;
-                    padding: 20px;
-                }}
-                .error-container {{
-                    background: white;
-                    padding: 40px;
-                    border-radius: 16px;
-                    box-shadow: 0 10px 40px rgba(0,0,0,0.3);
-                    text-align: center;
-                    max-width: 500px;
-                }}
-                .error-icon {{
-                    font-size: 80px;
-                    margin-bottom: 20px;
-                }}
-                h1 {{
-                    color: #e74c3c;
-                    margin: 0 0 10px 0;
-                }}
-                .error-message {{
-                    color: #555;
-                    font-size: 18px;
-                    margin-bottom: 20px;
-                }}
-                .code {{
-                    background: #f8f9fa;
-                    padding: 15px;
-                    border-radius: 8px;
-                    font-family: 'Courier New', monospace;
-                    color: #333;
-                    font-weight: bold;
-                    margin-bottom: 20px;
-                }}
-                .back-button {{
-                    display: inline-block;
-                    background: #667eea;
-                    color: white;
-                    padding: 12px 30px;
-                    border-radius: 8px;
-                    text-decoration: none;
-                    font-weight: bold;
-                    transition: all 0.3s;
-                }}
-                .back-button:hover {{
-                    background: #764ba2;
-                    transform: translateY(-2px);
-                    box-shadow: 0 5px 15px rgba(0,0,0,0.2);
-                }}
+                body {{ font-family: Arial; background: #f44336; color: white; text-align: center; padding: 50px; }}
+                h1 {{ font-size: 48px; }}
             </style>
         </head>
         <body>
-            <div class="error-container">
-                <div class="error-icon">❌</div>
-                <h1>Produto não encontrado</h1>
-                <p class="error-message">{produto['error']}</p>
-                <div class="code">Código: {mlb_code_limpo}</div>
-                <a href="/" class="back-button">🏠 Voltar para o início</a>
-            </div>
+            <h1>❌ Produto não encontrado</h1>
+            <p>{produto['error']}</p>
+            <p>Código: {mlb_code_limpo}</p>
+            <a href="/" style="color: white;">Voltar</a>
         </body>
         </html>
         """
     
-    # Se encontrou, exibir JSON formatado
     json_completo = produto.get('json_completo', produto)
     
     return f"""
@@ -855,295 +847,27 @@ def exibir_json(mlb_code):
     <html lang="pt-BR">
     <head>
         <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>📦 JSON - {mlb_code_limpo}</title>
+        <title>📦 {produto['titulo'][:50]}</title>
         <style>
-            * {{
-                margin: 0;
-                padding: 0;
-                box-sizing: border-box;
-            }}
-            
-            body {{
-                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                min-height: 100vh;
-                padding: 20px;
-            }}
-            
-            .header {{
-                background: white;
-                padding: 20px;
-                border-radius: 12px;
-                box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-                margin-bottom: 20px;
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                flex-wrap: wrap;
-                gap: 15px;
-            }}
-            
-            .header h1 {{
-                color: #333;
-                font-size: 24px;
-                display: flex;
-                align-items: center;
-                gap: 10px;
-            }}
-            
-            .product-info {{
-                background: rgba(255,255,255,0.95);
-                padding: 20px;
-                border-radius: 12px;
-                margin-bottom: 20px;
-                box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-            }}
-            
-            .product-info h2 {{
-                color: #667eea;
-                margin-bottom: 15px;
-                font-size: 20px;
-            }}
-            
-            .info-grid {{
-                display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-                gap: 15px;
-            }}
-            
-            .info-item {{
-                background: #f8f9fa;
-                padding: 12px;
-                border-radius: 8px;
-                border-left: 4px solid #667eea;
-            }}
-            
-            .info-label {{
-                font-size: 12px;
-                color: #666;
-                font-weight: bold;
-                text-transform: uppercase;
-                margin-bottom: 5px;
-            }}
-            
-            .info-value {{
-                font-size: 16px;
-                color: #333;
-                font-weight: bold;
-            }}
-            
-            .buttons {{
-                display: flex;
-                gap: 10px;
-                flex-wrap: wrap;
-            }}
-            
-            button, .btn {{
-                background: #667eea;
-                color: white;
-                border: none;
-                padding: 12px 24px;
-                border-radius: 8px;
-                cursor: pointer;
-                font-size: 14px;
-                font-weight: bold;
-                transition: all 0.3s;
-                display: inline-flex;
-                align-items: center;
-                gap: 8px;
-                text-decoration: none;
-            }}
-            
-            button:hover, .btn:hover {{
-                background: #764ba2;
-                transform: translateY(-2px);
-                box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-            }}
-            
-            .btn-success {{
-                background: #27ae60;
-            }}
-            
-            .btn-success:hover {{
-                background: #229954;
-            }}
-            
-            .btn-secondary {{
-                background: #95a5a6;
-            }}
-            
-            .btn-secondary:hover {{
-                background: #7f8c8d;
-            }}
-            
-            .json-container {{
-                background: #1e1e1e;
-                padding: 20px;
-                border-radius: 12px;
-                box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-                overflow: hidden;
-            }}
-            
-            pre {{
-                background: #252526;
-                padding: 20px;
-                border-radius: 8px;
-                overflow-x: auto;
-                border: 1px solid #3c3c3c;
-                color: #d4d4d4;
-                font-family: 'Courier New', monospace;
-                font-size: 13px;
-                line-height: 1.6;
-                max-height: 600px;
-                overflow-y: auto;
-            }}
-            
-            .copied {{
-                display: none;
-                background: #27ae60;
-                color: white;
-                padding: 12px 24px;
-                border-radius: 8px;
-                font-weight: bold;
-                animation: fadeIn 0.3s;
-            }}
-            
-            .copied.show {{
-                display: inline-flex;
-            }}
-            
-            @keyframes fadeIn {{
-                from {{ opacity: 0; transform: translateY(-10px); }}
-                to {{ opacity: 1; transform: translateY(0); }}
-            }}
-            
-            .link-box {{
-                background: #f8f9fa;
-                padding: 15px;
-                border-radius: 8px;
-                margin-top: 20px;
-                border: 2px dashed #667eea;
-            }}
-            
-            .link-box p {{
-                color: #666;
-                margin-bottom: 10px;
-                font-weight: bold;
-            }}
-            
-            .link-box input {{
-                width: 100%;
-                padding: 10px;
-                border: 1px solid #ddd;
-                border-radius: 6px;
-                font-family: 'Courier New', monospace;
-                font-size: 14px;
-            }}
-            
-            @media (max-width: 768px) {{
-                .header {{
-                    flex-direction: column;
-                    align-items: flex-start;
-                }}
-                
-                .buttons {{
-                    width: 100%;
-                }}
-                
-                button, .btn {{
-                    flex: 1;
-                    justify-content: center;
-                }}
-            }}
+            body {{ font-family: Arial; background: #1e1e1e; color: #d4d4d4; padding: 20px; }}
+            pre {{ background: #252526; padding: 20px; border-radius: 8px; overflow-x: auto; }}
+            button {{ background: #0e639c; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; margin: 10px 5px; }}
+            button:hover {{ background: #1177bb; }}
         </style>
     </head>
     <body>
-        <div class="header">
-            <h1>
-                <span>📦</span>
-                <span>{produto['titulo'][:50]}...</span>
-            </h1>
-            <div class="buttons">
-                <button onclick="copiarJSON()">📋 Copiar JSON</button>
-                <button onclick="baixarJSON()" class="btn-success">💾 Baixar JSON</button>
-                <a href="{produto['link']}" target="_blank" class="btn btn-success">🛒 Ver no ML</a>
-                <a href="/" class="btn btn-secondary">🏠 Início</a>
-                <span id="copiado" class="copied">✅ Copiado!</span>
-            </div>
-        </div>
-        
-        <div class="product-info">
-            <h2>ℹ️ Informações do Produto</h2>
-            <div class="info-grid">
-                <div class="info-item">
-                    <div class="info-label">Código MLB</div>
-                    <div class="info-value">{produto['id']}</div>
-                </div>
-                <div class="info-item">
-                    <div class="info-label">Preço</div>
-                    <div class="info-value">{produto['moeda']} {produto['preco']:,.2f}</div>
-                </div>
-                <div class="info-item">
-                    <div class="info-label">Condição</div>
-                    <div class="info-value">{produto['condicao']}</div>
-                </div>
-                <div class="info-item">
-                    <div class="info-label">Estoque</div>
-                    <div class="info-value">{produto['estoque']} unidades</div>
-                </div>
-                <div class="info-item">
-                    <div class="info-label">Vendidos</div>
-                    <div class="info-value">{produto['vendidos']} unidades</div>
-                </div>
-                <div class="info-item">
-                    <div class="info-label">Status</div>
-                    <div class="info-value">{produto['status']}</div>
-                </div>
-            </div>
-            
-            <div class="link-box">
-                <p>🔗 Link direto para este JSON:</p>
-                <input type="text" value="{request.url}" readonly onclick="this.select()">
-            </div>
-        </div>
-        
-        <div class="json-container">
-            <pre id="json-content">{json.dumps(json_completo, indent=2, ensure_ascii=False)}</pre>
-        </div>
-        
-        <script>
-            function copiarJSON() {{
-                const jsonText = document.getElementById('json-content').textContent;
-                navigator.clipboard.writeText(jsonText).then(() => {{
-                    const copiado = document.getElementById('copiado');
-                    copiado.classList.add('show');
-                    setTimeout(() => {{
-                        copiado.classList.remove('show');
-                    }}, 2000);
-                }});
-            }}
-            
-            function baixarJSON() {{
-                const jsonText = document.getElementById('json-content').textContent;
-                const blob = new Blob([jsonText], {{ type: 'application/json' }});
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = '{mlb_code_limpo}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.json';
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-            }}
-        </script>
+        <h1>📦 {produto['titulo']}</h1>
+        <button onclick="navigator.clipboard.writeText(document.getElementById('json').textContent)">📋 Copiar</button>
+        <button onclick="window.location.href='/exportar-json/{mlb_code_limpo}'">💾 Baixar</button>
+        <pre id="json">{json.dumps(json_completo, indent=2, ensure_ascii=False)}</pre>
     </body>
     </html>
     """
 
 
-
-
+# ========================================
+# INICIALIZAÇÃO
+# ========================================
 
 if __name__ == '__main__':
     print("=" * 60)
@@ -1167,6 +891,11 @@ if __name__ == '__main__':
         print("🔑 Tentando obter access token...")
         obter_access_token()
     
+    print("=" * 60)
+    print("🚚 ROTAS MERCADO ENVIOS FULL ATIVADAS:")
+    print("   /full/<mlb_code> - Verificar se é Full")
+    print("   /csv-full/<mlb_code> - CSV com info Full")
+    print("   /json-completo/<mlb_code> - JSON com tudo + Full")
     print("=" * 60)
     print("⚠️  Pressione CTRL+C para parar o servidor")
     print("=" * 60)
