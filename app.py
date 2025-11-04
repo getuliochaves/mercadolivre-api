@@ -5,25 +5,37 @@ import json
 import io
 import os
 
-# Importar configurações
+# ========================================
+# CONFIGURAÇÕES - LEITURA DAS VARIÁVEIS
+# ========================================
+
+# Tentar carregar do config.py (desenvolvimento local)
 try:
     from config import MERCADOLIVRE_CONFIG, FLASK_CONFIG, DATABASE_CONFIG
-    print("✅ Configurações carregadas com sucesso!")
+    print("✅ Configurações carregadas do config.py")
 except ImportError:
-    print("⚠️  AVISO: Arquivo config.py não encontrado!")
-    print("📝 Usando configurações padrão")
+    print("⚠️  config.py não encontrado - usando variáveis de ambiente")
+    
+    # CONFIGURAÇÕES DO MERCADO LIVRE (do Render)
     MERCADOLIVRE_CONFIG = {
-        'CLIENT_ID': os.getenv('ML_CLIENT_ID', ''),
-        'CLIENT_SECRET': os.getenv('ML_CLIENT_SECRET', ''),
-        'REDIRECT_URI': os.getenv('ML_REDIRECT_URI', 'http://localhost:5000/callback'),
-        'API_BASE_URL': 'https://api.mercadolibre.com'
+        'CLIENT_ID': os.getenv('CLIENT_ID', ''),
+        'CLIENT_SECRET': os.getenv('CLIENT_SECRET', ''),
+        'REDIRECT_URI': os.getenv('REDIRECT_URI', 'http://localhost:5000/callback'),
+        'API_BASE_URL': 'https://api.mercadolibre.com',
+        'ACCESS_TOKEN': os.getenv('ACCESS_TOKEN', ''),  # Token direto do Render
+        'REFRESH_TOKEN': os.getenv('REFRESH_TOKEN', ''),
+        'USER_ID': os.getenv('USER_ID', '')
     }
+    
+    # CONFIGURAÇÕES DO FLASK
     FLASK_CONFIG = {
         'DEBUG': os.getenv('DEBUG', 'False').lower() == 'true',
         'HOST': '0.0.0.0',
         'PORT': int(os.getenv('PORT', 5000)),
-        'SECRET_KEY': os.getenv('SECRET_KEY', 'change-this-secret-key')
+        'SECRET_KEY': os.getenv('Key', 'change-this-secret-key')
     }
+    
+    # CONFIGURAÇÕES DO BANCO/HISTÓRICO
     DATABASE_CONFIG = {
         'MAX_HISTORICO': int(os.getenv('MAX_HISTORICO', 50))
     }
@@ -34,38 +46,71 @@ app.secret_key = FLASK_CONFIG['SECRET_KEY']
 # Armazenamento em memória (histórico de buscas)
 historico_buscas = []
 
-# Token de acesso (será obtido via OAuth)
-access_token = None
+# Token de acesso (prioritário: variável de ambiente, senão OAuth)
+access_token = MERCADOLIVRE_CONFIG.get('ACCESS_TOKEN')
 
 def obter_access_token():
-    """Obtém um access token usando Client Credentials"""
+    """Obtém um access token usando Client Credentials ou Refresh Token"""
     global access_token
     
-    try:
-        url = f"{MERCADOLIVRE_CONFIG['API_BASE_URL']}/oauth/token"
-        
-        data = {
-            'grant_type': 'client_credentials',
-            'client_id': MERCADOLIVRE_CONFIG['CLIENT_ID'],
-            'client_secret': MERCADOLIVRE_CONFIG['CLIENT_SECRET']
-        }
-        
-        print(f"🔑 Obtendo access token...")
-        response = requests.post(url, data=data, timeout=10)
-        
-        if response.status_code == 200:
-            token_data = response.json()
-            access_token = token_data.get('access_token')
-            print(f"✅ Access token obtido com sucesso!")
-            return access_token
-        else:
-            print(f"❌ Erro ao obter token: {response.status_code}")
-            print(f"📄 Resposta: {response.text}")
-            return None
+    # Se já tem token configurado no Render, usar ele
+    if MERCADOLIVRE_CONFIG.get('ACCESS_TOKEN'):
+        access_token = MERCADOLIVRE_CONFIG['ACCESS_TOKEN']
+        print(f"✅ Usando ACCESS_TOKEN do Render")
+        return access_token
+    
+    # Senão, tentar renovar com REFRESH_TOKEN
+    if MERCADOLIVRE_CONFIG.get('REFRESH_TOKEN'):
+        try:
+            url = f"{MERCADOLIVRE_CONFIG['API_BASE_URL']}/oauth/token"
             
-    except Exception as e:
-        print(f"💥 Erro ao obter token: {str(e)}")
-        return None
+            data = {
+                'grant_type': 'refresh_token',
+                'client_id': MERCADOLIVRE_CONFIG['CLIENT_ID'],
+                'client_secret': MERCADOLIVRE_CONFIG['CLIENT_SECRET'],
+                'refresh_token': MERCADOLIVRE_CONFIG['REFRESH_TOKEN']
+            }
+            
+            print(f"🔄 Renovando access token com refresh_token...")
+            response = requests.post(url, data=data, timeout=10)
+            
+            if response.status_code == 200:
+                token_data = response.json()
+                access_token = token_data.get('access_token')
+                print(f"✅ Access token renovado com sucesso!")
+                return access_token
+            else:
+                print(f"❌ Erro ao renovar token: {response.status_code}")
+                print(f"📄 Resposta: {response.text}")
+        except Exception as e:
+            print(f"💥 Erro ao renovar token: {str(e)}")
+    
+    # Por último, tentar Client Credentials (acesso público limitado)
+    if MERCADOLIVRE_CONFIG.get('CLIENT_ID') and MERCADOLIVRE_CONFIG.get('CLIENT_SECRET'):
+        try:
+            url = f"{MERCADOLIVRE_CONFIG['API_BASE_URL']}/oauth/token"
+            
+            data = {
+                'grant_type': 'client_credentials',
+                'client_id': MERCADOLIVRE_CONFIG['CLIENT_ID'],
+                'client_secret': MERCADOLIVRE_CONFIG['CLIENT_SECRET']
+            }
+            
+            print(f"🔑 Obtendo access token com client_credentials...")
+            response = requests.post(url, data=data, timeout=10)
+            
+            if response.status_code == 200:
+                token_data = response.json()
+                access_token = token_data.get('access_token')
+                print(f"✅ Access token obtido com sucesso!")
+                return access_token
+            else:
+                print(f"❌ Erro ao obter token: {response.status_code}")
+                print(f"📄 Resposta: {response.text}")
+        except Exception as e:
+            print(f"💥 Erro ao obter token: {str(e)}")
+    
+    return None
 
 def limpar_codigo_mlb(codigo):
     """Remove hífens e espaços do código MLB"""
@@ -82,7 +127,7 @@ def buscar_produto_api(mlb_code):
         print(f"🔍 Buscando: {url}")
         
         # Tentar obter token se não tiver
-        if not access_token and MERCADOLIVRE_CONFIG['CLIENT_ID']:
+        if not access_token:
             obter_access_token()
         
         # Headers com autenticação
@@ -99,8 +144,8 @@ def buscar_produto_api(mlb_code):
         print(f"📊 Status Code: {response.status_code}")
         
         # Se token expirou (401), tentar renovar
-        if response.status_code == 401 and MERCADOLIVRE_CONFIG['CLIENT_ID']:
-            print(f"🔄 Token expirado, renovando...")
+        if response.status_code == 401:
+            print(f"🔄 Token expirado, tentando renovar...")
             if obter_access_token():
                 headers['Authorization'] = f"Bearer {access_token}"
                 response = requests.get(url, headers=headers, timeout=10)
@@ -348,8 +393,10 @@ def visualizar_json(mlb_code):
 def config_status():
     """Verifica status das configurações"""
     status = {
-        'client_id_configurado': bool(MERCADOLIVRE_CONFIG['CLIENT_ID']),
-        'client_secret_configurado': bool(MERCADOLIVRE_CONFIG['CLIENT_SECRET']),
+        'client_id_configurado': bool(MERCADOLIVRE_CONFIG.get('CLIENT_ID')),
+        'client_secret_configurado': bool(MERCADOLIVRE_CONFIG.get('CLIENT_SECRET')),
+        'access_token_configurado': bool(MERCADOLIVRE_CONFIG.get('ACCESS_TOKEN')),
+        'refresh_token_configurado': bool(MERCADOLIVRE_CONFIG.get('REFRESH_TOKEN')),
         'api_url': MERCADOLIVRE_CONFIG['API_BASE_URL'],
         'tem_access_token': bool(access_token)
     }
@@ -369,26 +416,12 @@ if __name__ == '__main__':
     print("=" * 60)
     print(f"📍 Porta: {FLASK_CONFIG['PORT']}")
     print(f"📍 Debug: {FLASK_CONFIG['DEBUG']}")
+    print(f"📍 Host: {FLASK_CONFIG['HOST']}")
     print("=" * 60)
     
     # Verificar configurações
-    if MERCADOLIVRE_CONFIG['CLIENT_ID'] and MERCADOLIVRE_CONFIG['CLIENT_SECRET']:
-        print("✅ Credenciais do Mercado Livre configuradas")
-        print("🔑 Tentando obter access token...")
-        if obter_access_token():
-            print("✅ Access token obtido com sucesso!")
-        else:
-            print("⚠️  Não foi possível obter access token")
-    else:
-        print("⚠️  Credenciais não configuradas")
-        print("💡 Configure ML_CLIENT_ID e ML_CLIENT_SECRET nas variáveis de ambiente")
-    
-    print("=" * 60)
-    print("⚠️  Pressione CTRL+C para parar o servidor")
-    print("=" * 60)
-    
-    app.run(
-        debug=FLASK_CONFIG['DEBUG'],
-        host=FLASK_CONFIG['HOST'],
-        port=FLASK_CONFIG['PORT']
-    )
+    print("🔍 VERIFICANDO CONFIGURAÇÕES:")
+    print(f"   CLIENT_ID: {'✅ Configurado' if MERCADOLIVRE_CONFIG.get('CLIENT_ID') else '❌ Não configurado'}")
+    print(f"   CLIENT_SECRET: {'✅ Configurado' if MERCADOLIVRE_CONFIG.get('CLIENT_SECRET') else '❌ Não configurado'}")
+    print(f"   ACCESS_TOKEN: {'✅ Configurado' if MERCADOLIVRE_CONFIG.get('ACCESS_TOKEN') else '❌ Não configurado'}")
+    print(
