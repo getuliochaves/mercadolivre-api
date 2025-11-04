@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mercado Livre - Consulta de Produtos</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .search-box {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            margin-bottom: 30px;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        input[type="text"] {
+            flex: 1;
+            padding: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        button {
+            padding: 15px 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #f5f5f5;
+            color: #333;
+        }
+
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+
+        .btn-json {
+            background: #4CAF50;
+            color: white;
+            padding: 8px 15px;
+            font-size: 14px;
+            margin-right: 5px;
+        }
+
+        .btn-json:hover {
+            background: #45a049;
+        }
+
+        .btn-download {
+            background: #2196F3;
+            color: white;
+            padding: 8px 15px;
+            font-size: 14px;
+        }
+
+        .btn-download:hover {
+            background: #0b7dda;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+            color: #667eea;
+            font-weight: bold;
+        }
+
+        .loading.active {
+            display: block;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .result {
+            display: none;
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            margin-bottom: 30px;
+        }
+
+        .result.active {
+            display: block;
+            animation: slideIn 0.5s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .error {
+            background: #ffebee;
+            color: #c62828;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid #c62828;
+        }
+
+        .product-header {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+
+        .product-image {
+            flex-shrink: 0;
+        }
+
+        .product-image img {
+            width: 200px;
+            height: 200px;
+            object-fit: cover;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+
+        .product-info {
+            flex: 1;
+        }
+
+        .product-title {
+            font-size: 1.8em;
+            color: #333;
+            margin-bottom: 15px;
+        }
+
+        .product-price {
+            font-size: 2em;
+            color: #4CAF50;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .product-details {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .detail-item {
+            background: #f9f9f9;
+            padding: 15px;
+            border-radius: 8px;
+        }
+
+        .detail-label {
+            font-weight: bold;
+            color: #666;
+            font-size: 0.9em;
+            margin-bottom: 5px;
+        }
+
+        .detail-value {
+            color: #333;
+            font-size: 1.1em;
+        }
+
+        .attributes {
+            margin-top: 20px;
+        }
+
+        .attributes h3 {
+            color: #667eea;
+            margin-bottom: 15px;
+        }
+
+        .attribute-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 10px;
+        }
+
+        .attribute-item {
+            background: #f9f9f9;
+            padding: 10px;
+            border-radius: 5px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .attribute-name {
+            font-weight: bold;
+            color: #666;
+        }
+
+        .attribute-value {
+            color: #333;
+        }
+
+        .json-buttons {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 2px solid #f0f0f0;
+            text-align: center;
+        }
+
+        .historico {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+
+        .historico h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+        }
+
+        .historico-item {
+            background: #f9f9f9;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .historico-item:hover {
+            background: #f0f0f0;
+            transform: translateX(5px);
+        }
+
+        .historico-item-title {
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .historico-item-info {
+            font-size: 0.9em;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🛒 Consulta Mercado Livre</h1>
+            <p>Digite o código MLB do produto para consultar</p>
+        </div>
+
+        <div class="search-box">
+            <div class="input-group">
+                <input 
+                    type="text" 
+                    id="mlb-input" 
+                    placeholder="Ex: MLB3703075771 ou MLB-3703075771"
+                    onkeypress="if(event.key === 'Enter') buscarProduto()"
+                >
+                <button class="btn-primary" onclick="buscarProduto()">🔍 Buscar</button>
+                <button class="btn-secondary" onclick="limparResultado()">🗑️ Limpar</button>
+            </div>
+            <small style="color: #666;">💡 Dica: Cole o código com ou sem hífens</small>
+        </div>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Buscando produto...</p>
+        </div>
+
+        <div class="result" id="result"></div>
+
+        <div class="historico" id="historico-container" style="display: none;">
+            <h2>📜 Histórico de Buscas</h2>
+            <div id="historico-list"></div>
+        </div>
+    </div>
+
+    <script>
+        // Carregar histórico ao iniciar
+        window.addEventListener('load', carregarHistorico);
+
+        function buscarProduto() {
+            const mlbCode = document.getElementById('mlb-input').value.trim();
+            
+            if (!mlbCode) {
+                alert('⚠️ Por favor, digite um código MLB');
+                return;
+            }
+
+            // Mostrar loading
+            document.getElementById('loading').classList.add('active');
+            document.getElementById('result').classList.remove('active');
+
+            // Fazer requisição
+            fetch('/buscar', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ mlb_code: mlbCode })
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('loading').classList.remove('active');
+                
+                if (data.error) {
+                    mostrarErro(data);
+                } else {
+                    mostrarProduto(data);
+                    carregarHistorico();
+                }
+            })
+            .catch(error => {
+                document.getElementById('loading').classList.remove('active');
+                mostrarErro({ error: 'Erro de conexão', codigo: mlbCode });
+                console.error('Erro:', error);
+            });
+        }
+
+        function mostrarProduto(produto) {
+            const resultDiv = document.getElementById('result');
+            
+            const imagemPrincipal = produto.imagens && produto.imagens.length > 0 
+                ? produto.imagens[0] 
+                : 'https://via.placeholder.com/200?text=Sem+Imagem';
+
+            let atributosHTML = '';
+            if (produto.atributos && produto.atributos.length > 0) {
+                atributosHTML = `
+                    <div class="attributes">
+                        <h3>📋 Atributos do Produto</h3>
+                        <div class="attribute-list">
+                            ${produto.atributos.map(attr => `
+                                <div class="attribute-item">
+                                    <span class="attribute-name">${attr.nome}:</span>
+                                    <span class="attribute-value">${attr.valor}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+
+            resultDiv.innerHTML = `
+                <div class="product-header">
+                    <div class="product-image">
+                        <img src="${imagemPrincipal}" alt="${produto.titulo}">
+                    </div>
+                    <div class="product-info">
+                        <h2 class="product-title">${produto.titulo}</h2>
+                        <div class="product-price">${produto.moeda} ${produto.preco.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</div>
+                        <p><strong>Código:</strong> ${produto.id}</p>
+                        <p><strong>Condição:</strong> ${produto.condicao}</p>
+                        <p><a href="${produto.link}" target="_blank" style="color: #667eea;">🔗 Ver no Mercado Livre</a></p>
+                    </div>
+                </div>
+
+                <div class="product-details">
+                    <div class="detail-item">
+                        <div class="detail-label">📦 Estoque Disponível</div>
+                        <div class="detail-value">${produto.estoque} unidades</div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="detail-label">✅ Vendidos</div>
+                        <div class="detail-value">${produto.vendidos} unidades</div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="detail-label">📂 Categoria</div>
+                        <div class="detail-value">${produto.categoria}</div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="detail-label">🔄 Status</div>
+                        <div class="detail-value">${produto.status}</div>
+                    </div>
+                </div>
+
+                ${atributosHTML}
+
+                <div class="json-buttons">
+                    <h3 style="color: #667eea; margin-bottom: 15px;">📄 Exportar Dados</h3>
+                    <button class="btn-json" onclick="visualizarJSON('${produto.id}')">
+                        👁️ Visualizar JSON
+                    </button>
+                    <button class="btn-download" onclick="baixarJSON('${produto.id}')">
+                        💾 Baixar JSON
+                    </button>
+                </div>
+            `;
+
+            resultDiv.classList.add('active');
+        }
+
+        function mostrarErro(data) {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = `
+                <div class="error">
+                    <h2>❌ Erro na Busca</h2>
+                    <p><strong>Código:</strong> ${data.codigo}</p>
+                    <p><strong>Mensagem:</strong> ${data.error}</p>
+                </div>
+            `;
+            resultDiv.classList.add('active');
+        }
+
+        function limparResultado() {
+            document.getElementById('mlb-input').value = '';
+            document.getElementById('result').classList.remove('active');
+            document.getElementById('loading').classList.remove('active');
+        }
+
+        function carregarHistorico() {
+            fetch('/historico')
+                .then(response => response.json())
+                .then(historico => {
+                    if (historico.length > 0) {
+                        const historicoContainer = document.getElementById('historico-container');
+                        const historicoList = document.getElementById('historico-list');
+                        
+                        historicoList.innerHTML = historico.map(item => `
+                            <div class="historico-item" onclick="document.getElementById('mlb-input').value='${item.id}'; buscarProduto();">
+                                <div class="historico-item-title">${item.titulo}</div>
+                                <div class="historico-item-info">
+                                    ${item.id} • ${item.moeda} ${item.preco.toLocaleString('pt-BR', {minimumFractionDigits: 2})} • ${item.data_busca}
+                                </div>
+                            </div>
+                        `).join('');
+                        
+                        historicoContainer.style.display = 'block';
+                    }
+                });
+        }
+
+        function visualizarJSON(mlbCode) {
+            window.open(`/visualizar-json/${mlbCode}`, '_blank');
+        }
+
+        function baixarJSON(mlbCode) {
+            window.location.href = `/exportar-json/${mlbCode}`;
+        }
+    </script>
+</body>
+</html>
