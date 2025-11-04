@@ -3,6 +3,7 @@ import requests
 from datetime import datetime
 import json
 import io
+import os
 
 # Importar configurações
 try:
@@ -10,21 +11,21 @@ try:
     print("✅ Configurações carregadas com sucesso!")
 except ImportError:
     print("⚠️  AVISO: Arquivo config.py não encontrado!")
-    print("📝 Crie o arquivo config.py com suas credenciais")
+    print("📝 Usando configurações padrão")
     MERCADOLIVRE_CONFIG = {
-        'CLIENT_ID': '',
-        'CLIENT_SECRET': '',
-        'REDIRECT_URI': 'http://localhost:5000/callback',
+        'CLIENT_ID': os.getenv('ML_CLIENT_ID', ''),
+        'CLIENT_SECRET': os.getenv('ML_CLIENT_SECRET', ''),
+        'REDIRECT_URI': os.getenv('ML_REDIRECT_URI', 'http://localhost:5000/callback'),
         'API_BASE_URL': 'https://api.mercadolibre.com'
     }
     FLASK_CONFIG = {
-        'DEBUG': True,
+        'DEBUG': os.getenv('DEBUG', 'False').lower() == 'true',
         'HOST': '0.0.0.0',
-        'PORT': 5000,
-        'SECRET_KEY': 'change-this-secret-key'
+        'PORT': int(os.getenv('PORT', 5000)),
+        'SECRET_KEY': os.getenv('SECRET_KEY', 'change-this-secret-key')
     }
     DATABASE_CONFIG = {
-        'MAX_HISTORICO': 50
+        'MAX_HISTORICO': int(os.getenv('MAX_HISTORICO', 50))
     }
 
 app = Flask(__name__)
@@ -131,10 +132,7 @@ def buscar_produto_api(mlb_code):
                 'json_completo': data
             }
             
-            # ========================================
             # REMOVER PRODUTO DUPLICADO DO HISTÓRICO
-            # ========================================
-            # Filtrar histórico removendo o produto se já existir
             historico_buscas = [p for p in historico_buscas if p['id'] != produto['id']]
             print(f"🔄 Produto {produto['id']} removido do histórico (se existia)")
             
@@ -159,7 +157,7 @@ def buscar_produto_api(mlb_code):
         elif response.status_code == 403:
             print(f"🚫 Acesso negado (403)")
             print(f"📄 Resposta: {response.text}")
-            return {'error': 'Acesso negado - Verifique suas credenciais no config.py', 'codigo': mlb_code}
+            return {'error': 'Acesso negado - Verifique suas credenciais', 'codigo': mlb_code}
         
         else:
             print(f"⚠️  Erro {response.status_code}: {response.text[:200]}")
@@ -228,20 +226,14 @@ def limpar_historico():
 @app.route('/exportar-json/<mlb_code>')
 def exportar_json(mlb_code):
     """Exporta o JSON completo de um produto específico"""
-    # Buscar produto no histórico
     produto = next((p for p in historico_buscas if p['id'] == mlb_code), None)
     
     if not produto:
         return jsonify({'error': 'Produto não encontrado no histórico'}), 404
     
-    # Pegar o JSON completo da API
     json_completo = produto.get('json_completo', produto)
-    
-    # Criar arquivo JSON em memória
     json_str = json.dumps(json_completo, indent=2, ensure_ascii=False)
     json_bytes = io.BytesIO(json_str.encode('utf-8'))
-    
-    # Nome do arquivo
     filename = f"{mlb_code}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
     
     print(f"📥 Exportando JSON: {filename}")
@@ -256,16 +248,13 @@ def exportar_json(mlb_code):
 @app.route('/visualizar-json/<mlb_code>')
 def visualizar_json(mlb_code):
     """Abre o JSON em uma nova aba (formatado)"""
-    # Buscar produto no histórico
     produto = next((p for p in historico_buscas if p['id'] == mlb_code), None)
     
     if not produto:
         return jsonify({'error': 'Produto não encontrado no histórico'}), 404
     
-    # Pegar o JSON completo da API
     json_completo = produto.get('json_completo', produto)
     
-    # Retornar JSON formatado
     return f"""
     <!DOCTYPE html>
     <html lang="pt-BR">
@@ -366,13 +355,20 @@ def config_status():
     }
     return jsonify(status)
 
-# Para funcionar no Render/Heroku
+@app.route('/health')
+def health():
+    """Health check para o Render"""
+    return jsonify({
+        'status': 'healthy',
+        'timestamp': datetime.now().isoformat()
+    }), 200
+
 if __name__ == '__main__':
     print("=" * 60)
     print("🚀 MERCADO LIVRE API - SERVIDOR INICIADO")
     print("=" * 60)
-    print(f"📍 Acesse: http://localhost:{FLASK_CONFIG['PORT']}")
-    print(f"📍 Ou: http://127.0.0.1:{FLASK_CONFIG['PORT']}")
+    print(f"📍 Porta: {FLASK_CONFIG['PORT']}")
+    print(f"📍 Debug: {FLASK_CONFIG['DEBUG']}")
     print("=" * 60)
     
     # Verificar configurações
@@ -385,36 +381,7 @@ if __name__ == '__main__':
             print("⚠️  Não foi possível obter access token")
     else:
         print("⚠️  Credenciais não configuradas")
-    
-    print("=" * 60)
-    print("⚠️  Pressione CTRL+C para parar o servidor")
-    print("=" * 60)
-    
-    app.run(
-        debug=FLASK_CONFIG['DEBUG'],
-        host=FLASK_CONFIG['HOST'],
-        port=FLASK_CONFIG['PORT']
-    )
-
-
-if __name__ == '__main__':
-    print("=" * 60)
-    print("🚀 MERCADO LIVRE API - SERVIDOR INICIADO")
-    print("=" * 60)
-    print(f"📍 Acesse: http://localhost:{FLASK_CONFIG['PORT']}")
-    print(f"📍 Ou: http://127.0.0.1:{FLASK_CONFIG['PORT']}")
-    print("=" * 60)
-    
-    # Verificar configurações
-    if MERCADOLIVRE_CONFIG['CLIENT_ID'] and MERCADOLIVRE_CONFIG['CLIENT_SECRET']:
-        print("✅ Credenciais do Mercado Livre configuradas")
-        print("🔑 Tentando obter access token...")
-        if obter_access_token():
-            print("✅ Access token obtido com sucesso!")
-        else:
-            print("⚠️  Não foi possível obter access token")
-    else:
-        print("⚠️  Credenciais não configuradas - configure no config.py")
+        print("💡 Configure ML_CLIENT_ID e ML_CLIENT_SECRET nas variáveis de ambiente")
     
     print("=" * 60)
     print("⚠️  Pressione CTRL+C para parar o servidor")
