@@ -360,6 +360,403 @@ def health():
         'timestamp': datetime.now().isoformat()
     }), 200
 
+
+
+@app.route('/exibir-json/<mlb_code>')
+def exibir_json(mlb_code):
+    """
+    Busca e exibe o JSON de um produto diretamente pela URL
+    Exemplo: https://mercadolivre-api-19r5.onrender.com/exibir-json/MLB3885071411
+    """
+    print(f"\n{'='*60}")
+    print(f"🔗 BUSCA VIA URL DINÂMICA")
+    print(f"{'='*60}")
+    print(f"📝 Código recebido: '{mlb_code}'")
+    
+    # Limpar código
+    mlb_code_limpo = limpar_codigo_mlb(mlb_code)
+    print(f"🧹 Código limpo: '{mlb_code_limpo}'")
+    
+    # Buscar produto na API
+    produto = buscar_produto_api(mlb_code_limpo)
+    
+    # Se deu erro, exibir página de erro
+    if 'error' in produto:
+        return f"""
+        <!DOCTYPE html>
+        <html lang="pt-BR">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>❌ Erro - {mlb_code_limpo}</title>
+            <style>
+                body {{
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    min-height: 100vh;
+                    margin: 0;
+                    padding: 20px;
+                }}
+                .error-container {{
+                    background: white;
+                    padding: 40px;
+                    border-radius: 16px;
+                    box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+                    text-align: center;
+                    max-width: 500px;
+                }}
+                .error-icon {{
+                    font-size: 80px;
+                    margin-bottom: 20px;
+                }}
+                h1 {{
+                    color: #e74c3c;
+                    margin: 0 0 10px 0;
+                }}
+                .error-message {{
+                    color: #555;
+                    font-size: 18px;
+                    margin-bottom: 20px;
+                }}
+                .code {{
+                    background: #f8f9fa;
+                    padding: 15px;
+                    border-radius: 8px;
+                    font-family: 'Courier New', monospace;
+                    color: #333;
+                    font-weight: bold;
+                    margin-bottom: 20px;
+                }}
+                .back-button {{
+                    display: inline-block;
+                    background: #667eea;
+                    color: white;
+                    padding: 12px 30px;
+                    border-radius: 8px;
+                    text-decoration: none;
+                    font-weight: bold;
+                    transition: all 0.3s;
+                }}
+                .back-button:hover {{
+                    background: #764ba2;
+                    transform: translateY(-2px);
+                    box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="error-container">
+                <div class="error-icon">❌</div>
+                <h1>Produto não encontrado</h1>
+                <p class="error-message">{produto['error']}</p>
+                <div class="code">Código: {mlb_code_limpo}</div>
+                <a href="/" class="back-button">🏠 Voltar para o início</a>
+            </div>
+        </body>
+        </html>
+        """
+    
+    # Se encontrou, exibir JSON formatado
+    json_completo = produto.get('json_completo', produto)
+    
+    return f"""
+    <!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>📦 JSON - {mlb_code_limpo}</title>
+        <style>
+            * {{
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }}
+            
+            body {{
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                min-height: 100vh;
+                padding: 20px;
+            }}
+            
+            .header {{
+                background: white;
+                padding: 20px;
+                border-radius: 12px;
+                box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+                margin-bottom: 20px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                flex-wrap: wrap;
+                gap: 15px;
+            }}
+            
+            .header h1 {{
+                color: #333;
+                font-size: 24px;
+                display: flex;
+                align-items: center;
+                gap: 10px;
+            }}
+            
+            .product-info {{
+                background: rgba(255,255,255,0.95);
+                padding: 20px;
+                border-radius: 12px;
+                margin-bottom: 20px;
+                box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            }}
+            
+            .product-info h2 {{
+                color: #667eea;
+                margin-bottom: 15px;
+                font-size: 20px;
+            }}
+            
+            .info-grid {{
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                gap: 15px;
+            }}
+            
+            .info-item {{
+                background: #f8f9fa;
+                padding: 12px;
+                border-radius: 8px;
+                border-left: 4px solid #667eea;
+            }}
+            
+            .info-label {{
+                font-size: 12px;
+                color: #666;
+                font-weight: bold;
+                text-transform: uppercase;
+                margin-bottom: 5px;
+            }}
+            
+            .info-value {{
+                font-size: 16px;
+                color: #333;
+                font-weight: bold;
+            }}
+            
+            .buttons {{
+                display: flex;
+                gap: 10px;
+                flex-wrap: wrap;
+            }}
+            
+            button, .btn {{
+                background: #667eea;
+                color: white;
+                border: none;
+                padding: 12px 24px;
+                border-radius: 8px;
+                cursor: pointer;
+                font-size: 14px;
+                font-weight: bold;
+                transition: all 0.3s;
+                display: inline-flex;
+                align-items: center;
+                gap: 8px;
+                text-decoration: none;
+            }}
+            
+            button:hover, .btn:hover {{
+                background: #764ba2;
+                transform: translateY(-2px);
+                box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            }}
+            
+            .btn-success {{
+                background: #27ae60;
+            }}
+            
+            .btn-success:hover {{
+                background: #229954;
+            }}
+            
+            .btn-secondary {{
+                background: #95a5a6;
+            }}
+            
+            .btn-secondary:hover {{
+                background: #7f8c8d;
+            }}
+            
+            .json-container {{
+                background: #1e1e1e;
+                padding: 20px;
+                border-radius: 12px;
+                box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+                overflow: hidden;
+            }}
+            
+            pre {{
+                background: #252526;
+                padding: 20px;
+                border-radius: 8px;
+                overflow-x: auto;
+                border: 1px solid #3c3c3c;
+                color: #d4d4d4;
+                font-family: 'Courier New', monospace;
+                font-size: 13px;
+                line-height: 1.6;
+                max-height: 600px;
+                overflow-y: auto;
+            }}
+            
+            .copied {{
+                display: none;
+                background: #27ae60;
+                color: white;
+                padding: 12px 24px;
+                border-radius: 8px;
+                font-weight: bold;
+                animation: fadeIn 0.3s;
+            }}
+            
+            .copied.show {{
+                display: inline-flex;
+            }}
+            
+            @keyframes fadeIn {{
+                from {{ opacity: 0; transform: translateY(-10px); }}
+                to {{ opacity: 1; transform: translateY(0); }}
+            }}
+            
+            .link-box {{
+                background: #f8f9fa;
+                padding: 15px;
+                border-radius: 8px;
+                margin-top: 20px;
+                border: 2px dashed #667eea;
+            }}
+            
+            .link-box p {{
+                color: #666;
+                margin-bottom: 10px;
+                font-weight: bold;
+            }}
+            
+            .link-box input {{
+                width: 100%;
+                padding: 10px;
+                border: 1px solid #ddd;
+                border-radius: 6px;
+                font-family: 'Courier New', monospace;
+                font-size: 14px;
+            }}
+            
+            @media (max-width: 768px) {{
+                .header {{
+                    flex-direction: column;
+                    align-items: flex-start;
+                }}
+                
+                .buttons {{
+                    width: 100%;
+                }}
+                
+                button, .btn {{
+                    flex: 1;
+                    justify-content: center;
+                }}
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h1>
+                <span>📦</span>
+                <span>{produto['titulo'][:50]}...</span>
+            </h1>
+            <div class="buttons">
+                <button onclick="copiarJSON()">📋 Copiar JSON</button>
+                <button onclick="baixarJSON()" class="btn-success">💾 Baixar JSON</button>
+                <a href="{produto['link']}" target="_blank" class="btn btn-success">🛒 Ver no ML</a>
+                <a href="/" class="btn btn-secondary">🏠 Início</a>
+                <span id="copiado" class="copied">✅ Copiado!</span>
+            </div>
+        </div>
+        
+        <div class="product-info">
+            <h2>ℹ️ Informações do Produto</h2>
+            <div class="info-grid">
+                <div class="info-item">
+                    <div class="info-label">Código MLB</div>
+                    <div class="info-value">{produto['id']}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Preço</div>
+                    <div class="info-value">{produto['moeda']} {produto['preco']:,.2f}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Condição</div>
+                    <div class="info-value">{produto['condicao']}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Estoque</div>
+                    <div class="info-value">{produto['estoque']} unidades</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Vendidos</div>
+                    <div class="info-value">{produto['vendidos']} unidades</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Status</div>
+                    <div class="info-value">{produto['status']}</div>
+                </div>
+            </div>
+            
+            <div class="link-box">
+                <p>🔗 Link direto para este JSON:</p>
+                <input type="text" value="{request.url}" readonly onclick="this.select()">
+            </div>
+        </div>
+        
+        <div class="json-container">
+            <pre id="json-content">{json.dumps(json_completo, indent=2, ensure_ascii=False)}</pre>
+        </div>
+        
+        <script>
+            function copiarJSON() {{
+                const jsonText = document.getElementById('json-content').textContent;
+                navigator.clipboard.writeText(jsonText).then(() => {{
+                    const copiado = document.getElementById('copiado');
+                    copiado.classList.add('show');
+                    setTimeout(() => {{
+                        copiado.classList.remove('show');
+                    }}, 2000);
+                }});
+            }}
+            
+            function baixarJSON() {{
+                const jsonText = document.getElementById('json-content').textContent;
+                const blob = new Blob([jsonText], {{ type: 'application/json' }});
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = '{mlb_code_limpo}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.json';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }}
+        </script>
+    </body>
+    </html>
+    """
+
+
+
+
+
 if __name__ == '__main__':
     print("=" * 60)
     print("🚀 MERCADO LIVRE API - SERVIDOR INICIADO")
