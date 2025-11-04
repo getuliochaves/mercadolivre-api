@@ -391,6 +391,145 @@ def json_puro(mlb_code):
     
     return jsonify(json_completo)
 
+@app.route('/csv/<mlb_code>')
+def csv_completo(mlb_code):
+    """
+    Retorna dados do produto em formato CSV
+    Ideal para IMPORTDATA do Google Sheets
+    Exemplo: https://mercadolivre-api-19r5.onrender.com/csv/MLB3885071411
+    """
+    print(f"\n{'='*60}")
+    print(f"📊 REQUISIÇÃO CSV")
+    print(f"{'='*60}")
+    print(f"📝 Código recebido: '{mlb_code}'")
+    
+    # Limpar código
+    mlb_code_limpo = limpar_codigo_mlb(mlb_code)
+    
+    # Buscar produto na API
+    produto = buscar_produto_api(mlb_code_limpo)
+    
+    # Se deu erro
+    if 'error' in produto:
+        csv_output = f"erro\n{produto['error']}"
+        return csv_output, 404, {'Content-Type': 'text/csv; charset=utf-8'}
+    
+    # Criar CSV com dados principais
+    csv_lines = []
+    csv_lines.append("campo,valor")
+    csv_lines.append(f"codigo,{produto['id']}")
+    csv_lines.append(f"titulo,\"{produto['titulo']}\"")
+    csv_lines.append(f"preco,{produto['preco']}")
+    csv_lines.append(f"moeda,{produto['moeda']}")
+    csv_lines.append(f"condicao,{produto['condicao']}")
+    csv_lines.append(f"estoque,{produto['estoque']}")
+    csv_lines.append(f"vendidos,{produto['vendidos']}")
+    csv_lines.append(f"categoria,{produto['categoria']}")
+    csv_lines.append(f"status,{produto['status']}")
+    csv_lines.append(f"link,{produto['link']}")
+    csv_lines.append(f"data_consulta,{produto['data_busca']}")
+    
+    csv_output = '\n'.join(csv_lines)
+    
+    print(f"✅ CSV gerado com sucesso!")
+    print(f"{'='*60}\n")
+    
+    return csv_output, 200, {'Content-Type': 'text/csv; charset=utf-8'}
+
+
+@app.route('/csv-atributos/<mlb_code>')
+def csv_atributos(mlb_code):
+    """
+    Retorna TODOS os atributos do produto em CSV
+    Inclui características técnicas completas
+    Exemplo: https://mercadolivre-api-19r5.onrender.com/csv-atributos/MLB3885071411
+    """
+    print(f"\n{'='*60}")
+    print(f"📊 REQUISIÇÃO CSV COM ATRIBUTOS")
+    print(f"{'='*60}")
+    
+    # Limpar código
+    mlb_code_limpo = limpar_codigo_mlb(mlb_code)
+    
+    # Buscar produto na API
+    produto = buscar_produto_api(mlb_code_limpo)
+    
+    # Se deu erro
+    if 'error' in produto:
+        csv_output = f"erro\n{produto['error']}"
+        return csv_output, 404, {'Content-Type': 'text/csv; charset=utf-8'}
+    
+    # Criar CSV com TODOS os dados
+    csv_lines = []
+    csv_lines.append("campo,valor")
+    
+    # Dados principais
+    csv_lines.append(f"codigo,{produto['id']}")
+    csv_lines.append(f"titulo,\"{produto['titulo']}\"")
+    csv_lines.append(f"preco,{produto['preco']}")
+    csv_lines.append(f"moeda,{produto['moeda']}")
+    csv_lines.append(f"condicao,{produto['condicao']}")
+    csv_lines.append(f"estoque,{produto['estoque']}")
+    csv_lines.append(f"vendidos,{produto['vendidos']}")
+    csv_lines.append(f"categoria,{produto['categoria']}")
+    csv_lines.append(f"status,{produto['status']}")
+    csv_lines.append(f"link,{produto['link']}")
+    
+    # Adicionar atributos
+    for attr in produto.get('atributos', []):
+        nome = attr['nome'].replace(',', ';')  # Evitar quebra de CSV
+        valor = str(attr['valor']).replace(',', ';')
+        csv_lines.append(f"\"{nome}\",\"{valor}\"")
+    
+    # Adicionar imagens
+    for i, img in enumerate(produto.get('imagens', []), 1):
+        csv_lines.append(f"imagem_{i},{img}")
+    
+    csv_lines.append(f"data_consulta,{produto['data_busca']}")
+    
+    csv_output = '\n'.join(csv_lines)
+    
+    print(f"✅ CSV com atributos gerado!")
+    print(f"{'='*60}\n")
+    
+    return csv_output, 200, {'Content-Type': 'text/csv; charset=utf-8'}
+
+
+@app.route('/json-raw/<mlb_code>')
+def json_raw(mlb_code):
+    """
+    Retorna o JSON COMPLETO e RAW direto da API do Mercado Livre
+    Sem processamento, exatamente como vem da API
+    Exemplo: https://mercadolivre-api-19r5.onrender.com/json-raw/MLB3885071411
+    """
+    print(f"\n{'='*60}")
+    print(f"📊 REQUISIÇÃO JSON RAW (COMPLETO)")
+    print(f"{'='*60}")
+    
+    # Limpar código
+    mlb_code_limpo = limpar_codigo_mlb(mlb_code)
+    
+    # Buscar produto na API
+    produto = buscar_produto_api(mlb_code_limpo)
+    
+    # Se deu erro
+    if 'error' in produto:
+        return jsonify(produto), 404
+    
+    # Retornar JSON COMPLETO da API (sem filtros)
+    json_completo = produto.get('json_completo', produto)
+    
+    print(f"✅ JSON RAW retornado!")
+    print(f"{'='*60}\n")
+    
+    # Adicionar headers CORS para permitir acesso de qualquer origem
+    response = jsonify(json_completo)
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type')
+    
+    return response
+
+
 
 @app.route('/json-simplificado/<mlb_code>')
 def json_simplificado(mlb_code):
