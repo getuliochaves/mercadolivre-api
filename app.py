@@ -529,6 +529,181 @@ def json_raw(mlb_code):
     
     return response
 
+@app.route('/json-completo/<mlb_code>')
+def json_completo_tudo(mlb_code):
+    """
+    Retorna JSON COMPLETO com TODOS os dados processados e organizados
+    Inclui: dados básicos, atributos, imagens, descrição, vendedor, etc.
+    Exemplo: https://mercadolivre-api-19r5.onrender.com/json-completo/MLB3885071411
+    """
+    print(f"\n{'='*60}")
+    print(f"📦 REQUISIÇÃO JSON COMPLETO (TUDO)")
+    print(f"{'='*60}")
+    print(f"📝 Código recebido: '{mlb_code}'")
+    
+    # Limpar código
+    mlb_code_limpo = limpar_codigo_mlb(mlb_code)
+    print(f"🧹 Código limpo: '{mlb_code_limpo}'")
+    
+    # Buscar produto na API
+    produto = buscar_produto_api(mlb_code_limpo)
+    
+    # Se deu erro, retornar erro em JSON
+    if 'error' in produto:
+        response = jsonify(produto)
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        return response, 404
+    
+    # Pegar JSON original da API
+    json_api = produto.get('json_completo', {})
+    
+    # Criar JSON super completo e organizado
+    json_completo = {
+        # ===== INFORMAÇÕES BÁSICAS =====
+        "informacoes_basicas": {
+            "codigo": produto['id'],
+            "titulo": produto['titulo'],
+            "subtitulo": json_api.get('subtitle', ''),
+            "link": produto['link'],
+            "status": produto['status'],
+            "data_criacao": json_api.get('date_created', ''),
+            "ultima_atualizacao": json_api.get('last_updated', ''),
+            "data_consulta": produto['data_busca']
+        },
+        
+        # ===== PREÇO E ESTOQUE =====
+        "preco_estoque": {
+            "preco": produto['preco'],
+            "preco_original": json_api.get('original_price'),
+            "moeda": produto['moeda'],
+            "estoque_disponivel": produto['estoque'],
+            "quantidade_vendida": produto['vendidos'],
+            "aceita_mercado_pago": json_api.get('accepts_mercadopago', False),
+            "frete_gratis": json_api.get('shipping', {}).get('free_shipping', False),
+            "tipo_listagem": json_api.get('listing_type_id', ''),
+            "metodo_compra": json_api.get('buying_mode', '')
+        },
+        
+        # ===== PRODUTO =====
+        "produto": {
+            "condicao": produto['condicao'],
+            "categoria_id": produto['categoria'],
+            "categoria_nome": json_api.get('category_id', ''),
+            "garantia": json_api.get('warranty', ''),
+            "catalogo_listado": json_api.get('catalog_listing', False),
+            "catalogo_produto_id": json_api.get('catalog_product_id', ''),
+            "dominio_id": json_api.get('domain_id', ''),
+            "tags": json_api.get('tags', []),
+            "video_id": json_api.get('video_id', '')
+        },
+        
+        # ===== ATRIBUTOS/CARACTERÍSTICAS =====
+        "atributos": produto.get('atributos', []),
+        
+        # ===== IMAGENS =====
+        "imagens": {
+            "total": len(produto.get('imagens', [])),
+            "urls": produto.get('imagens', []),
+            "thumbnail": json_api.get('thumbnail', ''),
+            "imagens_detalhadas": [
+                {
+                    "id": img.get('id', ''),
+                    "url": img.get('url', ''),
+                    "secure_url": img.get('secure_url', ''),
+                    "size": img.get('size', ''),
+                    "max_size": img.get('max_size', ''),
+                    "quality": img.get('quality', '')
+                }
+                for img in json_api.get('pictures', [])
+            ]
+        },
+        
+        # ===== VENDEDOR =====
+        "vendedor": {
+            "id": json_api.get('seller_id'),
+            "apelido": json_api.get('seller_address', {}).get('city', {}).get('name', ''),
+            "tipo_vendedor": 'Profissional' if json_api.get('official_store_id') else 'Particular',
+            "loja_oficial_id": json_api.get('official_store_id'),
+            "loja_oficial_nome": json_api.get('official_store_name', ''),
+            "reputacao": json_api.get('seller_reputation', {})
+        },
+        
+        # ===== LOCALIZAÇÃO =====
+        "localizacao": {
+            "cidade": json_api.get('seller_address', {}).get('city', {}).get('name', ''),
+            "estado": json_api.get('seller_address', {}).get('state', {}).get('name', ''),
+            "pais": json_api.get('seller_address', {}).get('country', {}).get('name', ''),
+            "codigo_postal": json_api.get('seller_address', {}).get('zip_code', ''),
+            "endereco_completo": json_api.get('seller_address', {})
+        },
+        
+        # ===== ENVIO =====
+        "envio": {
+            "frete_gratis": json_api.get('shipping', {}).get('free_shipping', False),
+            "modo_envio": json_api.get('shipping', {}).get('mode', ''),
+            "metodos_disponiveis": json_api.get('shipping', {}).get('methods', []),
+            "dimensoes": json_api.get('shipping', {}).get('dimensions', ''),
+            "tags_envio": json_api.get('shipping', {}).get('tags', []),
+            "logistica": json_api.get('shipping', {}).get('logistic_type', ''),
+            "loja_pickup": json_api.get('shipping', {}).get('store_pick_up', False)
+        },
+        
+        # ===== VARIAÇÕES (se houver) =====
+        "variacoes": [
+            {
+                "id": var.get('id'),
+                "preco": var.get('price'),
+                "estoque": var.get('available_quantity'),
+                "vendidos": var.get('sold_quantity'),
+                "imagem": var.get('picture_ids', []),
+                "atributos": var.get('attribute_combinations', [])
+            }
+            for var in json_api.get('variations', [])
+        ] if json_api.get('variations') else [],
+        
+        # ===== DESCRIÇÃO =====
+        "descricao": {
+            "tem_descricao": json_api.get('descriptions', []) != [],
+            "snapshot": json_api.get('descriptions', [{}])[0] if json_api.get('descriptions') else {}
+        },
+        
+        # ===== ESTATÍSTICAS =====
+        "estatisticas": {
+            "visitas": json_api.get('visits', 0),
+            "health": json_api.get('health', 0),
+            "catalogo_listado": json_api.get('catalog_listing', False)
+        },
+        
+        # ===== INFORMAÇÕES ADICIONAIS =====
+        "informacoes_adicionais": {
+            "site_id": json_api.get('site_id', ''),
+            "permalink": json_api.get('permalink', ''),
+            "secure_thumbnail": json_api.get('secure_thumbnail', ''),
+            "parent_item_id": json_api.get('parent_item_id', ''),
+            "differential_pricing": json_api.get('differential_pricing', {}),
+            "deal_ids": json_api.get('deal_ids', []),
+            "automatic_relist": json_api.get('automatic_relist', False),
+            "international_delivery_mode": json_api.get('international_delivery_mode', ''),
+            "channels": json_api.get('channels', [])
+        },
+        
+        # ===== JSON ORIGINAL COMPLETO DA API =====
+        "json_original_api": json_api
+    }
+    
+    print(f"✅ JSON COMPLETO gerado com sucesso!")
+    print(f"📊 Total de campos: {len(json_completo)}")
+    print(f"📸 Total de imagens: {len(produto.get('imagens', []))}")
+    print(f"🏷️ Total de atributos: {len(produto.get('atributos', []))}")
+    print(f"{'='*60}\n")
+    
+    # Retornar JSON com CORS habilitado
+    response = jsonify(json_completo)
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type')
+    response.headers.add('Content-Type', 'application/json; charset=utf-8')
+    
+    return response
 
 
 @app.route('/json-simplificado/<mlb_code>')
