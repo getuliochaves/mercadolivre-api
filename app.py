@@ -360,6 +360,80 @@ def health():
         'timestamp': datetime.now().isoformat()
     }), 200
 
+@app.route('/json/<mlb_code>')
+def json_puro(mlb_code):
+    """
+    Retorna apenas o JSON puro do produto (sem HTML)
+    Ideal para importar no Google Sheets ou outras integrações
+    Exemplo: https://mercadolivre-api-19r5.onrender.com/json/MLB3885071411
+    """
+    print(f"\n{'='*60}")
+    print(f"📊 REQUISIÇÃO JSON PURO")
+    print(f"{'='*60}")
+    print(f"📝 Código recebido: '{mlb_code}'")
+    
+    # Limpar código
+    mlb_code_limpo = limpar_codigo_mlb(mlb_code)
+    print(f"🧹 Código limpo: '{mlb_code_limpo}'")
+    
+    # Buscar produto na API
+    produto = buscar_produto_api(mlb_code_limpo)
+    
+    # Se deu erro, retornar erro em JSON
+    if 'error' in produto:
+        return jsonify(produto), 404
+    
+    # Retornar JSON completo
+    json_completo = produto.get('json_completo', produto)
+    
+    print(f"✅ JSON retornado com sucesso!")
+    print(f"{'='*60}\n")
+    
+    return jsonify(json_completo)
+
+
+@app.route('/json-simplificado/<mlb_code>')
+def json_simplificado(mlb_code):
+    """
+    Retorna JSON simplificado com apenas os dados principais
+    Ideal para planilhas (menos dados, mais fácil de trabalhar)
+    Exemplo: https://mercadolivre-api-19r5.onrender.com/json-simplificado/MLB3885071411
+    """
+    print(f"\n{'='*60}")
+    print(f"📊 REQUISIÇÃO JSON SIMPLIFICADO")
+    print(f"{'='*60}")
+    print(f"📝 Código recebido: '{mlb_code}'")
+    
+    # Limpar código
+    mlb_code_limpo = limpar_codigo_mlb(mlb_code)
+    
+    # Buscar produto na API
+    produto = buscar_produto_api(mlb_code_limpo)
+    
+    # Se deu erro, retornar erro em JSON
+    if 'error' in produto:
+        return jsonify(produto), 404
+    
+    # Criar versão simplificada
+    produto_simplificado = {
+        'codigo': produto['id'],
+        'titulo': produto['titulo'],
+        'preco': produto['preco'],
+        'moeda': produto['moeda'],
+        'condicao': produto['condicao'],
+        'estoque': produto['estoque'],
+        'vendidos': produto['vendidos'],
+        'categoria': produto['categoria'],
+        'status': produto['status'],
+        'link': produto['link'],
+        'imagem_principal': produto['imagens'][0] if produto['imagens'] else '',
+        'data_consulta': produto['data_busca']
+    }
+    
+    print(f"✅ JSON simplificado retornado!")
+    print(f"{'='*60}\n")
+    
+    return jsonify(produto_simplificado)
 
 
 @app.route('/exibir-json/<mlb_code>')
