@@ -866,7 +866,7 @@ def exibir_json(mlb_code):
 
 
 # ========================================
-# INICIALIZAÇÃO
+# INICIALIZAÇÃOO DO SERVIDOR
 # ========================================
 
 if __name__ == '__main__':
