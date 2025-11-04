@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mercado Livre - Consulta de Produtos</title>
+    <title>🔍 Mercado Livre API - Consulta de Produtos</title>
     <style>
         * {
             margin: 0;
@@ -35,6 +35,11 @@
             text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
         }
 
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
         .search-box {
             background: white;
             padding: 30px;
@@ -55,7 +60,7 @@
             border: 2px solid #e0e0e0;
             border-radius: 8px;
             font-size: 16px;
-            transition: border-color 0.3s;
+            transition: border 0.3s;
         }
 
         input[type="text"]:focus {
@@ -65,114 +70,56 @@
 
         button {
             padding: 15px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
             border: none;
             border-radius: 8px;
             font-size: 16px;
             font-weight: bold;
             cursor: pointer;
-            transition: all 0.3s;
+            transition: transform 0.2s, box-shadow 0.2s;
         }
 
-        .btn-primary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-        }
-
-        .btn-primary:hover {
+        button:hover {
             transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+
+        button:active {
+            transform: translateY(0);
         }
 
         .btn-secondary {
-            background: #f5f5f5;
-            color: #333;
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
         }
 
-        .btn-secondary:hover {
-            background: #e0e0e0;
+        .btn-success {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
         }
 
-        .btn-json {
-            background: #4CAF50;
-            color: white;
-            padding: 8px 15px;
-            font-size: 14px;
-            margin-right: 5px;
-        }
-
-        .btn-json:hover {
-            background: #45a049;
-        }
-
-        .btn-download {
-            background: #2196F3;
-            color: white;
-            padding: 8px 15px;
-            font-size: 14px;
-        }
-
-        .btn-download:hover {
-            background: #0b7dda;
-        }
-
-        .loading {
-            display: none;
-            text-align: center;
-            padding: 20px;
-            color: #667eea;
-            font-weight: bold;
-        }
-
-        .loading.active {
-            display: block;
-        }
-
-        .spinner {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #667eea;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 10px;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        .result {
-            display: none;
+        .result-box {
             background: white;
             padding: 30px;
             border-radius: 15px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            display: none;
             margin-bottom: 30px;
         }
 
-        .result.active {
+        .result-box.show {
             display: block;
-            animation: slideIn 0.5s ease;
+            animation: slideIn 0.3s ease-out;
         }
 
         @keyframes slideIn {
             from {
                 opacity: 0;
-                transform: translateY(20px);
+                transform: translateY(-20px);
             }
             to {
                 opacity: 1;
                 transform: translateY(0);
             }
-        }
-
-        .error {
-            background: #ffebee;
-            color: #c62828;
-            padding: 20px;
-            border-radius: 8px;
-            border-left: 4px solid #c62828;
         }
 
         .product-header {
@@ -184,14 +131,10 @@
         }
 
         .product-image {
-            flex-shrink: 0;
-        }
-
-        .product-image img {
-            width: 200px;
-            height: 200px;
+            width: 150px;
+            height: 150px;
             object-fit: cover;
-            border-radius: 8px;
+            border-radius: 10px;
             box-shadow: 0 4px 8px rgba(0,0,0,0.1);
         }
 
@@ -200,14 +143,14 @@
         }
 
         .product-title {
-            font-size: 1.8em;
+            font-size: 1.5em;
             color: #333;
-            margin-bottom: 15px;
+            margin-bottom: 10px;
         }
 
         .product-price {
             font-size: 2em;
-            color: #4CAF50;
+            color: #00a650;
             font-weight: bold;
             margin-bottom: 10px;
         }
@@ -216,299 +159,564 @@
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
             gap: 15px;
-            margin-top: 20px;
+            margin-bottom: 20px;
         }
 
         .detail-item {
-            background: #f9f9f9;
+            background: #f8f9fa;
             padding: 15px;
             border-radius: 8px;
+            border-left: 4px solid #667eea;
         }
 
         .detail-label {
-            font-weight: bold;
-            color: #666;
             font-size: 0.9em;
+            color: #666;
             margin-bottom: 5px;
         }
 
         .detail-value {
-            color: #333;
             font-size: 1.1em;
-        }
-
-        .attributes {
-            margin-top: 20px;
-        }
-
-        .attributes h3 {
-            color: #667eea;
-            margin-bottom: 15px;
-        }
-
-        .attribute-list {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 10px;
-        }
-
-        .attribute-item {
-            background: #f9f9f9;
-            padding: 10px;
-            border-radius: 5px;
-            display: flex;
-            justify-content: space-between;
-        }
-
-        .attribute-name {
-            font-weight: bold;
-            color: #666;
-        }
-
-        .attribute-value {
             color: #333;
+            font-weight: bold;
         }
 
-        .json-buttons {
-            margin-top: 20px;
-            padding-top: 20px;
-            border-top: 2px solid #f0f0f0;
-            text-align: center;
+        .full-badge {
+            display: inline-block;
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 0.9em;
+            margin-top: 10px;
         }
 
-        .historico {
+        .full-badge.yes {
+            background: #d4edda;
+            color: #155724;
+            border: 2px solid #28a745;
+        }
+
+        .full-badge.no {
+            background: #f8d7da;
+            color: #721c24;
+            border: 2px solid #dc3545;
+        }
+
+        /* ===== SEÇÃO DE LINKS DAS ROTAS ===== */
+        .routes-section {
             background: white;
             padding: 30px;
             border-radius: 15px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            margin-top: 20px;
         }
 
-        .historico h2 {
-            color: #667eea;
+        .routes-section h2 {
+            color: #333;
             margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 3px solid #667eea;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .routes-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .route-card {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            padding: 20px;
+            border-radius: 10px;
+            border-left: 5px solid #667eea;
+            transition: transform 0.2s, box-shadow 0.2s;
+            cursor: pointer;
+        }
+
+        .route-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+        }
+
+        .route-card.json {
+            border-left-color: #4facfe;
+            background: linear-gradient(135deg, #e0f7ff 0%, #b3e5fc 100%);
+        }
+
+        .route-card.csv {
+            border-left-color: #00a650;
+            background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+        }
+
+        .route-card.full {
+            border-left-color: #ff6b6b;
+            background: linear-gradient(135deg, #ffe0e0 0%, #ffcccb 100%);
+        }
+
+        .route-title {
+            font-size: 1.1em;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .route-description {
+            font-size: 0.9em;
+            color: #666;
+            margin-bottom: 10px;
+        }
+
+        .route-link {
+            display: inline-block;
+            padding: 8px 15px;
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            font-size: 0.85em;
+            transition: background 0.2s;
+        }
+
+        .route-link:hover {
+            background: #764ba2;
+        }
+
+        .route-link.disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+
+        .error-box {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 20px;
+            border-radius: 10px;
+            border-left: 5px solid #dc3545;
+            display: none;
+        }
+
+        .error-box.show {
+            display: block;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            display: none;
+        }
+
+        .loading.show {
+            display: block;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .historico-box {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            margin-top: 30px;
         }
 
         .historico-item {
-            background: #f9f9f9;
+            background: #f8f9fa;
             padding: 15px;
             border-radius: 8px;
             margin-bottom: 10px;
-            cursor: pointer;
-            transition: all 0.3s;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: background 0.2s;
         }
 
         .historico-item:hover {
-            background: #f0f0f0;
-            transform: translateX(5px);
+            background: #e9ecef;
         }
 
-        .historico-item-title {
-            font-weight: bold;
-            color: #333;
-            margin-bottom: 5px;
-        }
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 1.8em;
+            }
 
-        .historico-item-info {
-            font-size: 0.9em;
-            color: #666;
+            .input-group {
+                flex-direction: column;
+            }
+
+            .product-header {
+                flex-direction: column;
+            }
+
+            .product-image {
+                width: 100%;
+                height: 200px;
+            }
+
+            .routes-grid {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 </head>
 <body>
     <div class="container">
+        <!-- HEADER -->
         <div class="header">
-            <h1>🛒 Consulta Mercado Livre</h1>
-            <p>Digite o código MLB do produto para consultar</p>
+            <h1>🔍 Mercado Livre API</h1>
+            <p>Consulta completa de produtos com informações sobre Mercado Envios Full</p>
         </div>
 
+        <!-- CAIXA DE BUSCA -->
         <div class="search-box">
+            <h2 style="margin-bottom: 20px; color: #333;">🔎 Buscar Produto</h2>
             <div class="input-group">
                 <input 
                     type="text" 
                     id="mlb-input" 
-                    placeholder="Ex: MLB3703075771 ou MLB-3703075771"
+                    placeholder="Digite o código MLB (ex: MLB3885071411)"
                     onkeypress="if(event.key === 'Enter') buscarProduto()"
                 >
-                <button class="btn-primary" onclick="buscarProduto()">🔍 Buscar</button>
+                <button onclick="buscarProduto()">🔍 Buscar</button>
                 <button class="btn-secondary" onclick="limparResultado()">🗑️ Limpar</button>
             </div>
-            <small style="color: #666;">💡 Dica: Cole o código com ou sem hífens</small>
+            <p style="color: #666; font-size: 0.9em; margin-top: 10px;">
+                💡 Dica: Cole o código MLB ou o link completo do produto
+            </p>
         </div>
 
+        <!-- LOADING -->
         <div class="loading" id="loading">
             <div class="spinner"></div>
-            <p>Buscando produto...</p>
+            <p style="margin-top: 15px; color: white; font-weight: bold;">Buscando produto...</p>
         </div>
 
-        <div class="result" id="result"></div>
+        <!-- ERRO -->
+        <div class="error-box" id="error-box">
+            <strong>❌ Erro:</strong> <span id="error-message"></span>
+        </div>
 
-        <div class="historico" id="historico-container" style="display: none;">
-            <h2>📜 Histórico de Buscas</h2>
-            <div id="historico-list"></div>
+        <!-- RESULTADO -->
+        <div class="result-box" id="result-box">
+            <div class="product-header">
+                <img id="product-image" class="product-image" src="" alt="Produto">
+                <div class="product-info">
+                    <h2 class="product-title" id="product-title"></h2>
+                    <div class="product-price" id="product-price"></div>
+                    <p id="product-condition"></p>
+                    <div id="full-badge"></div>
+                </div>
+            </div>
+
+            <div class="product-details" id="product-details"></div>
+
+            <div style="margin-top: 20px; display: flex; gap: 10px; flex-wrap: wrap;">
+                <button class="btn-success" onclick="window.open(document.getElementById('product-link').value, '_blank')">
+                    🔗 Ver no Mercado Livre
+                </button>
+                <button onclick="verHistorico()">📋 Ver Histórico</button>
+            </div>
+            <input type="hidden" id="product-link">
+            <input type="hidden" id="product-code">
+        </div>
+
+        <!-- ===== SEÇÃO DE ROTAS (APARECE APÓS BUSCA) ===== -->
+        <div class="routes-section" id="routes-section" style="display: none;">
+            <h2>🔗 Links das Rotas Disponíveis</h2>
+            <p style="color: #666; margin-bottom: 20px;">
+                Clique nos links abaixo para acessar diferentes formatos de dados do produto
+            </p>
+
+            <!-- JSON -->
+            <h3 style="color: #4facfe; margin-top: 20px; margin-bottom: 10px;">📊 Rotas JSON</h3>
+            <div class="routes-grid">
+                <div class="route-card json">
+                    <div class="route-title">📄 JSON Puro</div>
+                    <div class="route-description">JSON completo direto da API do Mercado Livre</div>
+                    <a href="#" class="route-link" id="link-json" target="_blank">Abrir JSON</a>
+                </div>
+
+                <div class="route-card json">
+                    <div class="route-title">📦 JSON Completo + Full</div>
+                    <div class="route-description">JSON estruturado com TODAS as informações + Mercado Envios Full</div>
+                    <a href="#" class="route-link" id="link-json-completo" target="_blank">Abrir JSON Completo</a>
+                </div>
+
+                <div class="route-card json">
+                    <div class="route-title">📋 JSON Simplificado</div>
+                    <div class="route-description">Apenas os dados principais do produto</div>
+                    <a href="#" class="route-link" id="link-json-simplificado" target="_blank">Abrir JSON Simples</a>
+                </div>
+
+                <div class="route-card json">
+                    <div class="route-title">🔍 JSON Raw</div>
+                    <div class="route-description">JSON bruto sem processamento</div>
+                    <a href="#" class="route-link" id="link-json-raw" target="_blank">Abrir JSON Raw</a>
+                </div>
+            </div>
+
+            <!-- CSV -->
+            <h3 style="color: #00a650; margin-top: 30px; margin-bottom: 10px;">📊 Rotas CSV</h3>
+            <div class="routes-grid">
+                <div class="route-card csv">
+                    <div class="route-title">📄 CSV Básico</div>
+                    <div class="route-description">Dados principais em formato CSV</div>
+                    <a href="#" class="route-link" id="link-csv" target="_blank">Baixar CSV</a>
+                </div>
+
+                <div class="route-card csv">
+                    <div class="route-title">📋 CSV com Atributos</div>
+                    <div class="route-description">CSV completo incluindo todos os atributos</div>
+                    <a href="#" class="route-link" id="link-csv-atributos" target="_blank">Baixar CSV Atributos</a>
+                </div>
+
+                <div class="route-card csv">
+                    <div class="route-title">🚚 CSV com Full</div>
+                    <div class="route-description">CSV incluindo informações de Mercado Envios Full</div>
+                    <a href="#" class="route-link" id="link-csv-full" target="_blank">Baixar CSV Full</a>
+                </div>
+            </div>
+
+            <!-- MERCADO ENVIOS FULL -->
+            <h3 style="color: #ff6b6b; margin-top: 30px; margin-bottom: 10px;">🚚 Rotas Mercado Envios Full</h3>
+            <div class="routes-grid">
+                <div class="route-card full">
+                    <div class="route-title">🚚 Verificar Full</div>
+                    <div class="route-description">Verifica se o produto é Mercado Envios Full</div>
+                    <a href="#" class="route-link" id="link-full" target="_blank">Verificar Full</a>
+                </div>
+            </div>
+
+            <!-- VISUALIZAÇÃO -->
+            <h3 style="color: #667eea; margin-top: 30px; margin-bottom: 10px;">👁️ Rotas de Visualização</h3>
+            <div class="routes-grid">
+                <div class="route-card">
+                    <div class="route-title">👁️ Visualizar JSON</div>
+                    <div class="route-description">Visualizar JSON formatado no navegador</div>
+                    <a href="#" class="route-link" id="link-visualizar" target="_blank">Visualizar</a>
+                </div>
+
+                <div class="route-card">
+                    <div class="route-title">🖼️ Exibir JSON</div>
+                    <div class="route-description">Exibir JSON com opções de copiar e baixar</div>
+                    <a href="#" class="route-link" id="link-exibir" target="_blank">Exibir</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- HISTÓRICO -->
+        <div class="historico-box" id="historico-box" style="display: none;">
+            <h2 style="margin-bottom: 20px; color: #333;">📋 Histórico de Buscas</h2>
+            <div id="historico-lista"></div>
+            <button class="btn-secondary" onclick="limparHistorico()" style="margin-top: 15px;">
+                🗑️ Limpar Histórico
+            </button>
         </div>
     </div>
 
     <script>
-        // Carregar histórico ao iniciar
-        window.addEventListener('load', carregarHistorico);
+        const API_URL = window.location.origin;
 
-        function buscarProduto() {
-            const mlbCode = document.getElementById('mlb-input').value.trim();
+        async function buscarProduto() {
+            const input = document.getElementById('mlb-input').value.trim();
             
-            if (!mlbCode) {
-                alert('⚠️ Por favor, digite um código MLB');
+            if (!input) {
+                mostrarErro('Por favor, digite um código MLB');
                 return;
             }
 
-            // Mostrar loading
-            document.getElementById('loading').classList.add('active');
-            document.getElementById('result').classList.remove('active');
-
-            // Fazer requisição
-            fetch('/buscar', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ mlb_code: mlbCode })
-            })
-            .then(response => response.json())
-            .then(data => {
-                document.getElementById('loading').classList.remove('active');
-                
-                if (data.error) {
-                    mostrarErro(data);
-                } else {
-                    mostrarProduto(data);
-                    carregarHistorico();
-                }
-            })
-            .catch(error => {
-                document.getElementById('loading').classList.remove('active');
-                mostrarErro({ error: 'Erro de conexão', codigo: mlbCode });
-                console.error('Erro:', error);
-            });
-        }
-
-        function mostrarProduto(produto) {
-            const resultDiv = document.getElementById('result');
-            
-            const imagemPrincipal = produto.imagens && produto.imagens.length > 0 
-                ? produto.imagens[0] 
-                : 'https://via.placeholder.com/200?text=Sem+Imagem';
-
-            let atributosHTML = '';
-            if (produto.atributos && produto.atributos.length > 0) {
-                atributosHTML = `
-                    <div class="attributes">
-                        <h3>📋 Atributos do Produto</h3>
-                        <div class="attribute-list">
-                            ${produto.atributos.map(attr => `
-                                <div class="attribute-item">
-                                    <span class="attribute-name">${attr.nome}:</span>
-                                    <span class="attribute-value">${attr.valor}</span>
-                                </div>
-                            `).join('')}
-                        </div>
-                    </div>
-                `;
+            // Extrair código MLB do input
+            let mlbCode = input;
+            if (input.includes('MLB')) {
+                const match = input.match(/MLB\d+/);
+                if (match) mlbCode = match[0];
             }
 
-            resultDiv.innerHTML = `
-                <div class="product-header">
-                    <div class="product-image">
-                        <img src="${imagemPrincipal}" alt="${produto.titulo}">
-                    </div>
-                    <div class="product-info">
-                        <h2 class="product-title">${produto.titulo}</h2>
-                        <div class="product-price">${produto.moeda} ${produto.preco.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</div>
-                        <p><strong>Código:</strong> ${produto.id}</p>
-                        <p><strong>Condição:</strong> ${produto.condicao}</p>
-                        <p><a href="${produto.link}" target="_blank" style="color: #667eea;">🔗 Ver no Mercado Livre</a></p>
-                    </div>
-                </div>
+            // Mostrar loading
+            document.getElementById('loading').classList.add('show');
+            document.getElementById('error-box').classList.remove('show');
+            document.getElementById('result-box').classList.remove('show');
+            document.getElementById('routes-section').style.display = 'none';
 
-                <div class="product-details">
-                    <div class="detail-item">
-                        <div class="detail-label">📦 Estoque Disponível</div>
-                        <div class="detail-value">${produto.estoque} unidades</div>
-                    </div>
-                    <div class="detail-item">
-                        <div class="detail-label">✅ Vendidos</div>
-                        <div class="detail-value">${produto.vendidos} unidades</div>
-                    </div>
-                    <div class="detail-item">
-                        <div class="detail-label">📂 Categoria</div>
-                        <div class="detail-value">${produto.categoria}</div>
-                    </div>
-                    <div class="detail-item">
-                        <div class="detail-label">🔄 Status</div>
-                        <div class="detail-value">${produto.status}</div>
-                    </div>
-                </div>
+            try {
+                const response = await fetch(`${API_URL}/buscar`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ mlb_code: mlbCode })
+                });
 
-                ${atributosHTML}
+                const data = await response.json();
 
-                <div class="json-buttons">
-                    <h3 style="color: #667eea; margin-bottom: 15px;">📄 Exportar Dados</h3>
-                    <button class="btn-json" onclick="visualizarJSON('${produto.id}')">
-                        👁️ Visualizar JSON
-                    </button>
-                    <button class="btn-download" onclick="baixarJSON('${produto.id}')">
-                        💾 Baixar JSON
-                    </button>
-                </div>
-            `;
+                if (data.error) {
+                    mostrarErro(data.error);
+                    return;
+                }
 
-            resultDiv.classList.add('active');
+                mostrarResultado(data);
+                atualizarLinksRotas(data.id);
+
+            } catch (error) {
+                mostrarErro('Erro ao buscar produto: ' + error.message);
+            } finally {
+                document.getElementById('loading').classList.remove('show');
+            }
         }
 
-        function mostrarErro(data) {
-            const resultDiv = document.getElementById('result');
-            resultDiv.innerHTML = `
-                <div class="error">
-                    <h2>❌ Erro na Busca</h2>
-                    <p><strong>Código:</strong> ${data.codigo}</p>
-                    <p><strong>Mensagem:</strong> ${data.error}</p>
+        function mostrarResultado(produto) {
+            // Imagem
+            document.getElementById('product-image').src = produto.imagens[0] || 'https://via.placeholder.com/150';
+            
+            // Título
+            document.getElementById('product-title').textContent = produto.titulo;
+            
+            // Preço
+            document.getElementById('product-price').textContent = 
+                `${produto.moeda} ${produto.preco.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`;
+            
+            // Condição
+            document.getElementById('product-condition').textContent = produto.condicao;
+            
+            // Badge Full
+            const fullInfo = produto.json_completo?.shipping || {};
+            const isFull = fullInfo.logistic_type === 'fulfillment' || 
+                          (fullInfo.tags && fullInfo.tags.includes('fulfillment'));
+            
+            const fullBadge = document.getElementById('full-badge');
+            if (isFull) {
+                fullBadge.innerHTML = '<span class="full-badge yes">✅ Mercado Envios Full</span>';
+            } else {
+                fullBadge.innerHTML = '<span class="full-badge no">❌ Não é Full</span>';
+            }
+            
+            // Detalhes
+            const detailsHtml = `
+                <div class="detail-item">
+                    <div class="detail-label">Código</div>
+                    <div class="detail-value">${produto.id}</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">Estoque</div>
+                    <div class="detail-value">${produto.estoque} unidades</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">Vendidos</div>
+                    <div class="detail-value">${produto.vendidos} unidades</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">Status</div>
+                    <div class="detail-value">${produto.status}</div>
                 </div>
             `;
-            resultDiv.classList.add('active');
+            
+            document.getElementById('product-details').innerHTML = detailsHtml;
+            document.getElementById('product-link').value = produto.link;
+            document.getElementById('product-code').value = produto.id;
+            
+            // Mostrar resultado
+            document.getElementById('result-box').classList.add('show');
+            
+            // Mostrar seção de rotas
+            document.getElementById('routes-section').style.display = 'block';
+        }
+
+        function atualizarLinksRotas(mlbCode) {
+            // JSON
+            document.getElementById('link-json').href = `${API_URL}/json/${mlbCode}`;
+            document.getElementById('link-json-completo').href = `${API_URL}/json-completo/${mlbCode}`;
+            document.getElementById('link-json-simplificado').href = `${API_URL}/json-simplificado/${mlbCode}`;
+            document.getElementById('link-json-raw').href = `${API_URL}/json-raw/${mlbCode}`;
+            
+            // CSV
+            document.getElementById('link-csv').href = `${API_URL}/csv/${mlbCode}`;
+            document.getElementById('link-csv-atributos').href = `${API_URL}/csv-atributos/${mlbCode}`;
+            document.getElementById('link-csv-full').href = `${API_URL}/csv-full/${mlbCode}`;
+            
+            // Full
+            document.getElementById('link-full').href = `${API_URL}/full/${mlbCode}`;
+            
+            // Visualização
+            document.getElementById('link-visualizar').href = `${API_URL}/visualizar-json/${mlbCode}`;
+            document.getElementById('link-exibir').href = `${API_URL}/exibir-json/${mlbCode}`;
+        }
+
+        function mostrarErro(mensagem) {
+            document.getElementById('error-message').textContent = mensagem;
+            document.getElementById('error-box').classList.add('show');
         }
 
         function limparResultado() {
             document.getElementById('mlb-input').value = '';
-            document.getElementById('result').classList.remove('active');
-            document.getElementById('loading').classList.remove('active');
+            document.getElementById('result-box').classList.remove('show');
+            document.getElementById('error-box').classList.remove('show');
+            document.getElementById('routes-section').style.display = 'none';
         }
 
-        function carregarHistorico() {
-            fetch('/historico')
-                .then(response => response.json())
-                .then(historico => {
-                    if (historico.length > 0) {
-                        const historicoContainer = document.getElementById('historico-container');
-                        const historicoList = document.getElementById('historico-list');
-                        
-                        historicoList.innerHTML = historico.map(item => `
-                            <div class="historico-item" onclick="document.getElementById('mlb-input').value='${item.id}'; buscarProduto();">
-                                <div class="historico-item-title">${item.titulo}</div>
-                                <div class="historico-item-info">
-                                    ${item.id} • ${item.moeda} ${item.preco.toLocaleString('pt-BR', {minimumFractionDigits: 2})} • ${item.data_busca}
-                                </div>
+        async function verHistorico() {
+            try {
+                const response = await fetch(`${API_URL}/historico`);
+                const historico = await response.json();
+                
+                if (historico.length === 0) {
+                    alert('Nenhum histórico encontrado');
+                    return;
+                }
+                
+                let html = '';
+                historico.forEach(item => {
+                    html += `
+                        <div class="historico-item">
+                            <div>
+                                <strong>${item.titulo}</strong><br>
+                                <small>${item.id} - ${item.data_busca}</small>
                             </div>
-                        `).join('');
-                        
-                        historicoContainer.style.display = 'block';
-                    }
+                            <button onclick="document.getElementById('mlb-input').value='${item.id}'; buscarProduto();">
+                                🔍 Buscar
+                            </button>
+                        </div>
+                    `;
                 });
+                
+                document.getElementById('historico-lista').innerHTML = html;
+                document.getElementById('historico-box').style.display = 'block';
+                
+            } catch (error) {
+                alert('Erro ao carregar histórico');
+            }
         }
 
-        function visualizarJSON(mlbCode) {
-            window.open(`/visualizar-json/${mlbCode}`, '_blank');
-        }
-
-        function baixarJSON(mlbCode) {
-            window.location.href = `/exportar-json/${mlbCode}`;
+        async function limparHistorico() {
+            if (!confirm('Deseja realmente limpar o histórico?')) return;
+            
+            try {
+                await fetch(`${API_URL}/limpar-historico`, { method: 'POST' });
+                document.getElementById('historico-box').style.display = 'none';
+                alert('Histórico limpo com sucesso!');
+            } catch (error) {
+                alert('Erro ao limpar histórico');
+            }
         }
     </script>
 </body>

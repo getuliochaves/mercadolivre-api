@@ -6,112 +6,104 @@ import io
 import os
 
 # ========================================
-# CONFIGURAÇÕES - LEITURA DAS VARIÁVEIS
+# CONFIGURAÇÕES
 # ========================================
 
-# Tentar carregar do config.py (desenvolvimento local)
-try:
-    from config import MERCADOLIVRE_CONFIG, FLASK_CONFIG, DATABASE_CONFIG
-    print("✅ Configurações carregadas do config.py")
-except ImportError:
-    print("⚠️  config.py não encontrado - usando variáveis de ambiente")
-    
-    # CONFIGURAÇÕES DO MERCADO LIVRE (do Render)
-    MERCADOLIVRE_CONFIG = {
-        'CLIENT_ID': os.getenv('CLIENT_ID', ''),
-        'CLIENT_SECRET': os.getenv('CLIENT_SECRET', ''),
-        'REDIRECT_URI': os.getenv('REDIRECT_URI', 'http://localhost:5000/callback'),
-        'API_BASE_URL': 'https://api.mercadolibre.com',
-        'ACCESS_TOKEN': os.getenv('ACCESS_TOKEN', ''),
-        'REFRESH_TOKEN': os.getenv('REFRESH_TOKEN', ''),
-        'USER_ID': os.getenv('USER_ID', '')
-    }
-    
-    # CONFIGURAÇÕES DO FLASK
-    FLASK_CONFIG = {
-        'DEBUG': os.getenv('DEBUG', 'False').lower() == 'true',
-        'HOST': '0.0.0.0',
-        'PORT': int(os.getenv('PORT', 5000)),
-        'SECRET_KEY': os.getenv('Key', 'change-this-secret-key')
-    }
-    
-    # CONFIGURAÇÕES DO BANCO/HISTÓRICO
-    DATABASE_CONFIG = {
-        'MAX_HISTORICO': int(os.getenv('MAX_HISTORICO', 50))
-    }
+def carregar_configuracoes():
+    """Carrega configurações do config.py ou variáveis de ambiente"""
+    try:
+        from config import MERCADOLIVRE_CONFIG, FLASK_CONFIG, DATABASE_CONFIG
+        print("✅ Configurações carregadas do config.py")
+        return MERCADOLIVRE_CONFIG, FLASK_CONFIG, DATABASE_CONFIG
+    except ImportError:
+        print("⚠️  config.py não encontrado - usando variáveis de ambiente")
+        
+        return (
+            {
+                'CLIENT_ID': os.getenv('CLIENT_ID', ''),
+                'CLIENT_SECRET': os.getenv('CLIENT_SECRET', ''),
+                'REDIRECT_URI': os.getenv('REDIRECT_URI', 'http://localhost:5000/callback'),
+                'API_BASE_URL': 'https://api.mercadolibre.com',
+                'ACCESS_TOKEN': os.getenv('ACCESS_TOKEN', ''),
+                'REFRESH_TOKEN': os.getenv('REFRESH_TOKEN', ''),
+                'USER_ID': os.getenv('USER_ID', '')
+            },
+            {
+                'DEBUG': os.getenv('DEBUG', 'False').lower() == 'true',
+                'HOST': '0.0.0.0',
+                'PORT': int(os.getenv('PORT', 5000)),
+                'SECRET_KEY': os.getenv('SECRET_KEY', 'change-this-secret-key')
+            },
+            {
+                'MAX_HISTORICO': int(os.getenv('MAX_HISTORICO', 50))
+            }
+        )
+
+MERCADOLIVRE_CONFIG, FLASK_CONFIG, DATABASE_CONFIG = carregar_configuracoes()
+
+# ========================================
+# INICIALIZAÇÃO
+# ========================================
 
 app = Flask(__name__)
 app.secret_key = FLASK_CONFIG['SECRET_KEY']
 
-# Armazenamento em memória (histórico de buscas)
 historico_buscas = []
-
-# Token de acesso (prioritário: variável de ambiente, senão OAuth)
 access_token = MERCADOLIVRE_CONFIG.get('ACCESS_TOKEN')
-
 
 # ========================================
 # FUNÇÕES AUXILIARES
 # ========================================
 
 def obter_access_token():
-    """Obtém um access token usando Client Credentials ou Refresh Token"""
+    """Obtém ou renova access token"""
     global access_token
     
-    # Se já tem token configurado no Render, usar ele
     if MERCADOLIVRE_CONFIG.get('ACCESS_TOKEN'):
         access_token = MERCADOLIVRE_CONFIG['ACCESS_TOKEN']
-        print(f"✅ Usando ACCESS_TOKEN do Render")
+        print("✅ Usando ACCESS_TOKEN configurado")
         return access_token
     
-    # Senão, tentar renovar com REFRESH_TOKEN
     if MERCADOLIVRE_CONFIG.get('REFRESH_TOKEN'):
         try:
-            url = f"{MERCADOLIVRE_CONFIG['API_BASE_URL']}/oauth/token"
-            
-            data = {
-                'grant_type': 'refresh_token',
-                'client_id': MERCADOLIVRE_CONFIG['CLIENT_ID'],
-                'client_secret': MERCADOLIVRE_CONFIG['CLIENT_SECRET'],
-                'refresh_token': MERCADOLIVRE_CONFIG['REFRESH_TOKEN']
-            }
-            
-            print(f"🔄 Renovando access token com refresh_token...")
-            response = requests.post(url, data=data, timeout=10)
+            response = requests.post(
+                f"{MERCADOLIVRE_CONFIG['API_BASE_URL']}/oauth/token",
+                data={
+                    'grant_type': 'refresh_token',
+                    'client_id': MERCADOLIVRE_CONFIG['CLIENT_ID'],
+                    'client_secret': MERCADOLIVRE_CONFIG['CLIENT_SECRET'],
+                    'refresh_token': MERCADOLIVRE_CONFIG['REFRESH_TOKEN']
+                },
+                timeout=10
+            )
             
             if response.status_code == 200:
-                token_data = response.json()
-                access_token = token_data.get('access_token')
-                print(f"✅ Access token renovado com sucesso!")
+                access_token = response.json().get('access_token')
+                print("✅ Access token renovado com sucesso!")
                 return access_token
             else:
                 print(f"❌ Erro ao renovar token: {response.status_code}")
-                print(f"📄 Resposta: {response.text}")
         except Exception as e:
             print(f"💥 Erro ao renovar token: {str(e)}")
     
-    # Por último, tentar Client Credentials (acesso público limitado)
     if MERCADOLIVRE_CONFIG.get('CLIENT_ID') and MERCADOLIVRE_CONFIG.get('CLIENT_SECRET'):
         try:
-            url = f"{MERCADOLIVRE_CONFIG['API_BASE_URL']}/oauth/token"
-            
-            data = {
-                'grant_type': 'client_credentials',
-                'client_id': MERCADOLIVRE_CONFIG['CLIENT_ID'],
-                'client_secret': MERCADOLIVRE_CONFIG['CLIENT_SECRET']
-            }
-            
-            print(f"🔑 Obtendo access token com client_credentials...")
-            response = requests.post(url, data=data, timeout=10)
+            response = requests.post(
+                f"{MERCADOLIVRE_CONFIG['API_BASE_URL']}/oauth/token",
+                data={
+                    'grant_type': 'client_credentials',
+                    'client_id': MERCADOLIVRE_CONFIG['CLIENT_ID'],
+                    'client_secret': MERCADOLIVRE_CONFIG['CLIENT_SECRET']
+                },
+                timeout=10
+            )
             
             if response.status_code == 200:
-                token_data = response.json()
-                access_token = token_data.get('access_token')
-                print(f"✅ Access token obtido com sucesso!")
+                access_token = response.json().get('access_token')
+                print("✅ Access token obtido com client_credentials!")
                 return access_token
             else:
                 print(f"❌ Erro ao obter token: {response.status_code}")
-                print(f"📄 Resposta: {response.text}")
         except Exception as e:
             print(f"💥 Erro ao obter token: {str(e)}")
     
@@ -119,17 +111,13 @@ def obter_access_token():
 
 
 def limpar_codigo_mlb(codigo):
-    """Remove hífens e espaços do código MLB"""
+    """Remove caracteres inválidos do código MLB"""
     return codigo.replace('-', '').replace(' ', '').strip().upper()
 
 
 def extrair_info_full(json_api):
-    """
-    Extrai informações detalhadas sobre Mercado Envios Full
-    """
+    """Extrai informações detalhadas sobre Mercado Envios Full"""
     shipping = json_api.get('shipping', {})
-    
-    # Verificar se é Full
     logistic_type = shipping.get('logistic_type', '')
     tags = shipping.get('tags', [])
     
@@ -140,17 +128,14 @@ def extrair_info_full(json_api):
         'mandatory_free_shipping' in tags
     )
     
-    # Tipo de Full
     tipo_full = 'Não é Full'
     if is_full:
-        if logistic_type == 'fulfillment':
-            tipo_full = 'Mercado Envios Full'
-        elif logistic_type == 'xd_drop_off':
-            tipo_full = 'Full com Cross Docking'
-        elif logistic_type == 'cross_docking':
-            tipo_full = 'Cross Docking'
-        else:
-            tipo_full = 'Full (tipo não especificado)'
+        tipos = {
+            'fulfillment': 'Mercado Envios Full',
+            'xd_drop_off': 'Full com Cross Docking',
+            'cross_docking': 'Cross Docking'
+        }
+        tipo_full = tipos.get(logistic_type, 'Full (tipo não especificado)')
     
     return {
         'e_full': is_full,
@@ -184,20 +169,16 @@ def buscar_produto_api(mlb_code):
         if not access_token:
             obter_access_token()
         
-        headers = {}
-        if access_token:
-            headers['Authorization'] = f"Bearer {access_token}"
-            print(f"🔑 Usando access token")
-        else:
-            print(f"⚠️  Sem autenticação (tentando API pública)")
+        headers = {'Authorization': f"Bearer {access_token}"} if access_token else {}
+        print(f"🔑 {'Usando' if access_token else 'Sem'} autenticação")
         
         response = requests.get(url, headers=headers, timeout=10)
         print(f"📊 Status Code: {response.status_code}")
         
         if response.status_code == 401:
-            print(f"🔄 Token expirado, tentando renovar...")
+            print("🔄 Token expirado, renovando...")
             if obter_access_token():
-                headers['Authorization'] = f"Bearer {access_token}"
+                headers = {'Authorization': f"Bearer {access_token}"}
                 response = requests.get(url, headers=headers, timeout=10)
                 print(f"📊 Novo Status Code: {response.status_code}")
         
@@ -228,18 +209,20 @@ def buscar_produto_api(mlb_code):
             historico_buscas = [p for p in historico_buscas if p['id'] != produto['id']]
             historico_buscas.insert(0, produto)
             
-            max_historico = DATABASE_CONFIG['MAX_HISTORICO']
-            if len(historico_buscas) > max_historico:
+            if len(historico_buscas) > DATABASE_CONFIG['MAX_HISTORICO']:
                 historico_buscas.pop()
             
             return produto
         
-        elif response.status_code == 404:
-            return {'error': 'Produto não encontrado', 'codigo': mlb_code}
-        elif response.status_code == 403:
-            return {'error': 'Acesso negado - Verifique suas credenciais', 'codigo': mlb_code}
-        else:
-            return {'error': f'Erro na API: {response.status_code}', 'codigo': mlb_code}
+        codigos_erro = {
+            404: 'Produto não encontrado',
+            403: 'Acesso negado - Verifique suas credenciais'
+        }
+        
+        if response.status_code in codigos_erro:
+            return {'error': codigos_erro[response.status_code], 'codigo': mlb_code}
+        
+        return {'error': f'Erro na API: {response.status_code}', 'codigo': mlb_code}
     
     except requests.exceptions.Timeout:
         return {'error': 'Tempo de requisição excedido', 'codigo': mlb_code}
@@ -251,8 +234,15 @@ def buscar_produto_api(mlb_code):
         return {'error': f'Erro inesperado: {str(e)}', 'codigo': mlb_code}
 
 
+def adicionar_cors(response):
+    """Adiciona headers CORS à resposta"""
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type')
+    return response
+
+
 # ========================================
-# ROTAS
+# ROTAS PRINCIPAIS
 # ========================================
 
 @app.route('/')
@@ -410,15 +400,14 @@ def visualizar_json(mlb_code):
 
 @app.route('/config-status')
 def config_status():
-    status = {
+    return jsonify({
         'client_id_configurado': bool(MERCADOLIVRE_CONFIG.get('CLIENT_ID')),
         'client_secret_configurado': bool(MERCADOLIVRE_CONFIG.get('CLIENT_SECRET')),
         'access_token_configurado': bool(MERCADOLIVRE_CONFIG.get('ACCESS_TOKEN')),
         'refresh_token_configurado': bool(MERCADOLIVRE_CONFIG.get('REFRESH_TOKEN')),
         'api_url': MERCADOLIVRE_CONFIG['API_BASE_URL'],
         'tem_access_token': bool(access_token)
-    }
-    return jsonify(status)
+    })
 
 
 @app.route('/health')
@@ -429,12 +418,13 @@ def health():
     }), 200
 
 
+# ========================================
+# ROTAS DE EXPORTAÇÃO
+# ========================================
+
 @app.route('/json/<mlb_code>')
 def json_puro(mlb_code):
-    """
-    Retorna apenas o JSON puro do produto (sem HTML)
-    Ideal para importar no Google Sheets ou outras integrações
-    """
+    """Retorna apenas o JSON puro do produto"""
     print(f"\n{'='*60}")
     print(f"📊 REQUISIÇÃO JSON PURO")
     print(f"{'='*60}")
@@ -455,59 +445,53 @@ def json_puro(mlb_code):
 
 @app.route('/csv/<mlb_code>')
 def csv_completo(mlb_code):
-    """
-    Retorna dados do produto em formato CSV
-    """
+    """Retorna dados do produto em formato CSV"""
     mlb_code_limpo = limpar_codigo_mlb(mlb_code)
     produto = buscar_produto_api(mlb_code_limpo)
     
     if 'error' in produto:
-        csv_output = f"erro\n{produto['error']}"
-        return csv_output, 404, {'Content-Type': 'text/csv; charset=utf-8'}
+        return f"erro\n{produto['error']}", 404, {'Content-Type': 'text/csv; charset=utf-8'}
     
-    csv_lines = []
-    csv_lines.append("campo,valor")
-    csv_lines.append(f"codigo,{produto['id']}")
-    csv_lines.append(f"titulo,\"{produto['titulo']}\"")
-    csv_lines.append(f"preco,{produto['preco']}")
-    csv_lines.append(f"moeda,{produto['moeda']}")
-    csv_lines.append(f"condicao,{produto['condicao']}")
-    csv_lines.append(f"estoque,{produto['estoque']}")
-    csv_lines.append(f"vendidos,{produto['vendidos']}")
-    csv_lines.append(f"categoria,{produto['categoria']}")
-    csv_lines.append(f"status,{produto['status']}")
-    csv_lines.append(f"link,{produto['link']}")
-    csv_lines.append(f"data_consulta,{produto['data_busca']}")
+    csv_lines = [
+        "campo,valor",
+        f"codigo,{produto['id']}",
+        f"titulo,\"{produto['titulo']}\"",
+        f"preco,{produto['preco']}",
+        f"moeda,{produto['moeda']}",
+        f"condicao,{produto['condicao']}",
+        f"estoque,{produto['estoque']}",
+        f"vendidos,{produto['vendidos']}",
+        f"categoria,{produto['categoria']}",
+        f"status,{produto['status']}",
+        f"link,{produto['link']}",
+        f"data_consulta,{produto['data_busca']}"
+    ]
     
-    csv_output = '\n'.join(csv_lines)
-    
-    return csv_output, 200, {'Content-Type': 'text/csv; charset=utf-8'}
+    return '\n'.join(csv_lines), 200, {'Content-Type': 'text/csv; charset=utf-8'}
 
 
 @app.route('/csv-atributos/<mlb_code>')
 def csv_atributos(mlb_code):
-    """
-    Retorna TODOS os atributos do produto em CSV
-    """
+    """Retorna TODOS os atributos do produto em CSV"""
     mlb_code_limpo = limpar_codigo_mlb(mlb_code)
     produto = buscar_produto_api(mlb_code_limpo)
     
     if 'error' in produto:
-        csv_output = f"erro\n{produto['error']}"
-        return csv_output, 404, {'Content-Type': 'text/csv; charset=utf-8'}
+        return f"erro\n{produto['error']}", 404, {'Content-Type': 'text/csv; charset=utf-8'}
     
-    csv_lines = []
-    csv_lines.append("campo,valor")
-    csv_lines.append(f"codigo,{produto['id']}")
-    csv_lines.append(f"titulo,\"{produto['titulo']}\"")
-    csv_lines.append(f"preco,{produto['preco']}")
-    csv_lines.append(f"moeda,{produto['moeda']}")
-    csv_lines.append(f"condicao,{produto['condicao']}")
-    csv_lines.append(f"estoque,{produto['estoque']}")
-    csv_lines.append(f"vendidos,{produto['vendidos']}")
-    csv_lines.append(f"categoria,{produto['categoria']}")
-    csv_lines.append(f"status,{produto['status']}")
-    csv_lines.append(f"link,{produto['link']}")
+    csv_lines = [
+        "campo,valor",
+        f"codigo,{produto['id']}",
+        f"titulo,\"{produto['titulo']}\"",
+        f"preco,{produto['preco']}",
+        f"moeda,{produto['moeda']}",
+        f"condicao,{produto['condicao']}",
+        f"estoque,{produto['estoque']}",
+        f"vendidos,{produto['vendidos']}",
+        f"categoria,{produto['categoria']}",
+        f"status,{produto['status']}",
+        f"link,{produto['link']}"
+    ]
     
     for attr in produto.get('atributos', []):
         nome = attr['nome'].replace(',', ';')
@@ -519,21 +503,16 @@ def csv_atributos(mlb_code):
     
     csv_lines.append(f"data_consulta,{produto['data_busca']}")
     
-    csv_output = '\n'.join(csv_lines)
-    
-    return csv_output, 200, {'Content-Type': 'text/csv; charset=utf-8'}
+    return '\n'.join(csv_lines), 200, {'Content-Type': 'text/csv; charset=utf-8'}
 
 
 # ========================================
-# 🚚 ROTAS MERCADO ENVIOS FULL
+# ROTAS MERCADO ENVIOS FULL
 # ========================================
 
 @app.route('/full/<mlb_code>')
 def verificar_full(mlb_code):
-    """
-    Verifica se o produto é Mercado Envios Full
-    Exemplo: https://mercadolivre-api-19r5.onrender.com/full/MLB3885071411
-    """
+    """Verifica se o produto é Mercado Envios Full"""
     print(f"\n{'='*60}")
     print(f"🚚 VERIFICAÇÃO MERCADO ENVIOS FULL")
     print(f"{'='*60}")
@@ -542,9 +521,7 @@ def verificar_full(mlb_code):
     produto = buscar_produto_api(mlb_code_limpo)
     
     if 'error' in produto:
-        response = jsonify(produto)
-        response.headers.add('Access-Control-Allow-Origin', '*')
-        return response, 404
+        return adicionar_cors(jsonify(produto)), 404
     
     json_api = produto.get('json_completo', {})
     info_full = extrair_info_full(json_api)
@@ -566,18 +543,12 @@ def verificar_full(mlb_code):
     print(f"📦 Tipo: {info_full['tipo_full']}")
     print(f"{'='*60}\n")
     
-    response = jsonify(resposta)
-    response.headers.add('Access-Control-Allow-Origin', '*')
-    
-    return response
+    return adicionar_cors(jsonify(resposta))
 
 
 @app.route('/csv-full/<mlb_code>')
 def csv_com_full(mlb_code):
-    """
-    Retorna CSV com informações sobre Full
-    Exemplo: https://mercadolivre-api-19r5.onrender.com/csv-full/MLB3885071411
-    """
+    """Retorna CSV com informações sobre Full"""
     mlb_code_limpo = limpar_codigo_mlb(mlb_code)
     produto = buscar_produto_api(mlb_code_limpo)
     
@@ -587,30 +558,27 @@ def csv_com_full(mlb_code):
     json_api = produto.get('json_completo', {})
     info_full = extrair_info_full(json_api)
     
-    csv_lines = []
-    csv_lines.append("campo,valor")
-    csv_lines.append(f"codigo,{produto['id']}")
-    csv_lines.append(f"titulo,\"{produto['titulo']}\"")
-    csv_lines.append(f"preco,{produto['preco']}")
-    csv_lines.append(f"estoque,{produto['estoque']}")
-    csv_lines.append(f"vendidos,{produto['vendidos']}")
-    csv_lines.append(f"e_full,{info_full['e_full']}")
-    csv_lines.append(f"tipo_full,{info_full['tipo_full']}")
-    csv_lines.append(f"frete_gratis,{info_full['frete_gratis']}")
-    csv_lines.append(f"logistic_type,{info_full['logistic_type']}")
-    csv_lines.append(f"modo_envio,{info_full['modo_envio']}")
-    csv_lines.append(f"link,{produto['link']}")
+    csv_lines = [
+        "campo,valor",
+        f"codigo,{produto['id']}",
+        f"titulo,\"{produto['titulo']}\"",
+        f"preco,{produto['preco']}",
+        f"estoque,{produto['estoque']}",
+        f"vendidos,{produto['vendidos']}",
+        f"e_full,{info_full['e_full']}",
+        f"tipo_full,{info_full['tipo_full']}",
+        f"frete_gratis,{info_full['frete_gratis']}",
+        f"logistic_type,{info_full['logistic_type']}",
+        f"modo_envio,{info_full['modo_envio']}",
+        f"link,{produto['link']}"
+    ]
     
-    csv_output = '\n'.join(csv_lines)
-    
-    return csv_output, 200, {'Content-Type': 'text/csv; charset=utf-8'}
+    return '\n'.join(csv_lines), 200, {'Content-Type': 'text/csv; charset=utf-8'}
 
 
 @app.route('/json-raw/<mlb_code>')
 def json_raw(mlb_code):
-    """
-    Retorna o JSON COMPLETO e RAW direto da API
-    """
+    """Retorna o JSON COMPLETO e RAW direto da API"""
     mlb_code_limpo = limpar_codigo_mlb(mlb_code)
     produto = buscar_produto_api(mlb_code_limpo)
     
@@ -619,19 +587,12 @@ def json_raw(mlb_code):
     
     json_completo = produto.get('json_completo', produto)
     
-    response = jsonify(json_completo)
-    response.headers.add('Access-Control-Allow-Origin', '*')
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type')
-    
-    return response
+    return adicionar_cors(jsonify(json_completo))
 
 
 @app.route('/json-completo/<mlb_code>')
 def json_completo_tudo(mlb_code):
-    """
-    Retorna JSON COMPLETO com TODOS os dados + FULL
-    Exemplo: https://mercadolivre-api-19r5.onrender.com/json-completo/MLB3885071411
-    """
+    """Retorna JSON COMPLETO com TODOS os dados + FULL"""
     print(f"\n{'='*60}")
     print(f"📦 REQUISIÇÃO JSON COMPLETO (TUDO + FULL)")
     print(f"{'='*60}")
@@ -640,9 +601,7 @@ def json_completo_tudo(mlb_code):
     produto = buscar_produto_api(mlb_code_limpo)
     
     if 'error' in produto:
-        response = jsonify(produto)
-        response.headers.add('Access-Control-Allow-Origin', '*')
-        return response, 404
+        return adicionar_cors(jsonify(produto)), 404
     
     json_api = produto.get('json_completo', {})
     info_full = extrair_info_full(json_api)
@@ -683,7 +642,6 @@ def json_completo_tudo(mlb_code):
             "video_id": json_api.get('video_id', '')
         },
         
-        # ===== MERCADO ENVIOS FULL ===== 🚚
         "mercado_envios_full": info_full,
         
         "atributos": produto.get('atributos', []),
@@ -774,9 +732,7 @@ def json_completo_tudo(mlb_code):
     print(f"🚚 É Full? {info_full['e_full']} ({info_full['tipo_full']})")
     print(f"{'='*60}\n")
     
-    response = jsonify(json_completo)
-    response.headers.add('Access-Control-Allow-Origin', '*')
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type')
+    response = adicionar_cors(jsonify(json_completo))
     response.headers.add('Content-Type', 'application/json; charset=utf-8')
     
     return response
@@ -784,9 +740,7 @@ def json_completo_tudo(mlb_code):
 
 @app.route('/json-simplificado/<mlb_code>')
 def json_simplificado(mlb_code):
-    """
-    Retorna JSON simplificado com apenas os dados principais
-    """
+    """Retorna JSON simplificado com apenas os dados principais"""
     mlb_code_limpo = limpar_codigo_mlb(mlb_code)
     produto = buscar_produto_api(mlb_code_limpo)
     
@@ -813,9 +767,7 @@ def json_simplificado(mlb_code):
 
 @app.route('/exibir-json/<mlb_code>')
 def exibir_json(mlb_code):
-    """
-    Busca e exibe o JSON de um produto diretamente pela URL
-    """
+    """Busca e exibe o JSON de um produto diretamente pela URL"""
     mlb_code_limpo = limpar_codigo_mlb(mlb_code)
     produto = buscar_produto_api(mlb_code_limpo)
     
@@ -866,7 +818,7 @@ def exibir_json(mlb_code):
 
 
 # ========================================
-# INICIALIZAÇÃOO DO SERVIDOR
+# INICIALIZAÇÃO DO SERVIDOR
 # ========================================
 
 if __name__ == '__main__':
